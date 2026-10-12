@@ -53,7 +53,7 @@
     instead of copies of their shapes. Test-only; the last versions under a permissive license.
   -->
   <ItemGroup>
-    <PackageVersion Include="AutoMapper" Version="14.0.0" />
+    <PackageVersion Include="AutoMapper" Version="16.2.0" />
     <PackageVersion Include="Mapster" Version="7.4.0" />
     <PackageVersion Include="MediatR" Version="12.5.0" />
     <PackageVersion Include="Mediator.Abstractions" Version="3.0.2" />
