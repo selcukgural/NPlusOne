@@ -19,6 +19,9 @@ updates:
       # The published libraries depend on the lowest supported EF Core patch on purpose.
       - dependency-name: "Microsoft.EntityFrameworkCore.Relational"
         update-types: ["version-update:semver-patch"]
+      # The analyzer builds against Roslyn 4.8 so it loads in every compiler since .NET 8's SDK and Visual Studio 17.8;
+      # a newer Roslyn would raise that floor for every user. Raising it is a release decision, not a bump.
+      - dependency-name: "Microsoft.CodeAnalysis*"
       # The corpus is compiled against these libraries, and the comparison scores these tools: a new major is a work
       # item (corpus cases, new results), not a bump. AutoMapper 15+ and MediatR 13+ are commercially licensed.
       - dependency-name: "AutoMapper"
