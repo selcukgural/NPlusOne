@@ -1,0 +1,29 @@
+name: Missed N+1
+description: Code runs a round trip per element and the analyzer stays quiet.
+labels: ["missed"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you: every missed case becomes a test case, proven on a real database, and a fix. Please leave out anything
+        confidential (names, connection strings, data).
+  - type: textarea
+    id: code
+    attributes:
+      label: Code
+      description: The smallest code with the N+1, with the entities and the query it depends on.
+      render: csharp
+    validations:
+      required: true
+  - type: textarea
+    id: round-trip
+    attributes:
+      label: The repeated round trip
+      description: Which query, lazy load or save runs once per element (the runtime guard's report helps).
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: NPlusOne.Analyzers 1.0.0, EF Core 9.0.x, .NET SDK 9.0.x

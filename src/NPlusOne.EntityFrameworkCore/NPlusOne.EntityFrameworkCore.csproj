@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <Title>N+1 runtime guard for EF Core</Title>
+    <Description>Runtime N+1 guard for EF Core: records the commands a scope (a test, a request) runs and reports queries and lazy loads repeated once per element.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="NPlusOne.EntityFrameworkCore.Tests" />
+  </ItemGroup>
+</Project>

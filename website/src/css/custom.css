@@ -1,0 +1,23 @@
+/* Site-wide colours: .NET purple, lighter in dark mode for contrast. */
+:root {
+  --ifm-color-primary: #512bd4;
+  --ifm-color-primary-dark: #4926bf;
+  --ifm-color-primary-darker: #4524b4;
+  --ifm-color-primary-darkest: #391e94;
+  --ifm-color-primary-light: #623ed8;
+  --ifm-color-primary-lighter: #6a48da;
+  --ifm-color-primary-lightest: #8466e1;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #a48cf0;
+  --ifm-color-primary-dark: #8f72ec;
+  --ifm-color-primary-darker: #8565ea;
+  --ifm-color-primary-darkest: #6640e4;
+  --ifm-color-primary-light: #b9a6f4;
+  --ifm-color-primary-lighter: #c3b3f6;
+  --ifm-color-primary-lightest: #e2d9fb;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}

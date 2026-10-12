@@ -1,0 +1,128 @@
+[
+  {
+    "name": "List indexer at the loop index is an element",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "IPropertyReferenceOperation { Property.IsIndexer: true, Instance: { } list, Arguments.Length: 1 } indexer",
+    "new": "IPropertyReferenceOperation { Property.IsIndexer: false, Instance: { } list, Arguments.Length: 1 } indexer"
+  },
+  {
+    "name": "Array element at the loop index is an element",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "IArrayElementReferenceOperation { Indices.Length: 1 } element",
+    "new": "IArrayElementReferenceOperation { Indices.Length: 2 } element"
+  },
+  {
+    "name": "The index must use the loop counter (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "foreach (var operation in index.DescendantsAndSelf())",
+    "new": "foreach (var operation in index.DescendantsAndSelf().Concat(loop.Condition?.DescendantsAndSelf() ?? []))"
+  },
+  {
+    "name": "The counter must be stepped (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "if (target is ILocalReferenceOperation stepped && SymbolEqualityComparer.Default.Equals(stepped.Local, reference.Local))",
+    "new": "if (target is ILocalReferenceOperation stepped && stepped.Local is not null)"
+  },
+  {
+    "name": "Indexed entities trace to the list's source",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "            return Trace(list, depth).Element();\n",
+    "new": "            return SourceInfo.Unknown;\n"
+  },
+  {
+    "name": "Array elements trace to the array's source",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "IArrayElementReferenceOperation element when session.Entities.IsEntity(element.Type) => Trace(element.ArrayReference, depth).Element(),",
+    "new": "IArrayElementReferenceOperation element when session.Entities.IsEntity(element.Type) => SourceInfo.Unknown,"
+  },
+  {
+    "name": "Tuple item parts must be built per element (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "            || !IsBuiltPerElement(ElementParts.Resolve(loop.Collection, member), hops))",
+    "new": "            || ElementParts.Resolve(loop.Collection, member) is null || hops < 0)"
+  },
+  {
+    "name": "Deconstructed parts must be built per element (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "                   && IsBuiltPerElement(ElementParts.Resolve(loop.Collection, member), hops)\n",
+    "new": "\n"
+  },
+  {
+    "name": "Elements of a sequence are per element",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "=> part is { ElementOf: not null } || part?.Value",
+    "new": "=> part?.Value"
+  },
+  {
+    "name": "Named tuple fields read as their ItemN",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "(field.CorrespondingTupleField ?? field).Name",
+    "new": "field.Name"
+  },
+  {
+    "name": "KeyValuePair.Value is a part",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "Property: { Name: \"Value\", ContainingType: { } type }",
+    "new": "Property: { Name: \"ValueX\", ContainingType: { } type }"
+  },
+  {
+    "name": "Deconstructed tuple position",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "\"Item\" + (i + 1)",
+    "new": "\"Item\" + i"
+  },
+  {
+    "name": "Deconstructed key/value pair position",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "i == 0 ? \"Key\" : \"Value\"",
+    "new": "\"Key\""
+  },
+  {
+    "name": "Select builds tuples at their position",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "new ElementPart(tuple.Elements[position - 1], null)",
+    "new": "new ElementPart(tuple.Elements[0], null)"
+  },
+  {
+    "name": "ToDictionary() over tuples resolves its values",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "return SourceElementsAreTuples(producer) ? Resolve(source, \"Item2\") : null;",
+    "new": "return null;"
+  },
+  {
+    "name": "ToDictionary with a key selector holds the elements",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "                return new ElementPart(null, source);\n",
+    "new": "                return null;\n"
+  },
+  {
+    "name": "Index() items are the elements",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "case \"Index\" when member == \"Item2\":",
+    "new": "case \"Index\" when member == \"Item3\":"
+  },
+  {
+    "name": "Copies of the sequence are followed",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "case IInvocationOperation { TargetMethod.Name: \"ToList\" or",
+    "new": "case IInvocationOperation { TargetMethod.Name: \"ToListX\" or"
+  },
+  {
+    "name": "Locals holding the sequence are followed",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "case ILocalReferenceOperation local when Operations.SingleInitializer(local) is { } initializer:",
+    "new": "case ILocalReferenceOperation local when Operations.SingleInitializer(local) is { } initializer && false:"
+  },
+  {
+    "name": "Deconstructed foreach locals trace to their part",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "? TraceResolved(ElementParts.Resolve(loop.Collection, member), depth)\n                        : SourceInfo.Unknown);",
+    "new": "? SourceInfo.Unknown\n                        : SourceInfo.Unknown);"
+  },
+  {
+    "name": "The loop's own declaration does not hide the part",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "when !ElementParts.IsLoopControlVariable(operation) && Mentions(operation, local)",
+    "new": "when Mentions(operation, local)"
+  }
+]

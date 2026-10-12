@@ -1,0 +1,32 @@
+[
+  {
+    "name": "yield return is checked",
+    "file": "src/NPlusOne.Analyzers/NPlusOneAnalyzer.cs",
+    "old": "OperationKind.Return, OperationKind.YieldReturn);",
+    "new": "OperationKind.Return);"
+  },
+  {
+    "name": "A streamed item is one of many",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "single: element is null && !site.Item,",
+    "new": "single: element is null,"
+  },
+  {
+    "name": "Channel writes of a hub returning the reader are streamed",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "        CheckChannelWrite(context, invocation);\n",
+    "new": ""
+  },
+  {
+    "name": "Only a hub returning a ChannelReader streams its writes (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "|| owner is not IMethodSymbol { ReturnType: INamedTypeSymbol returned } || Model.Symbols.FullName(returned.OriginalDefinition) != \"System.Threading.Channels.ChannelReader\")",
+    "new": "|| owner is not IMethodSymbol { ReturnType: INamedTypeSymbol returned })"
+  },
+  {
+    "name": "WithCancellation walks the same query",
+    "file": "src/NPlusOne.Analyzers/Analysis/QueryCalls.cs",
+    "old": "if (method.Name is \"WithCancellation\" or \"ConfigureAwait\" &&",
+    "new": "if (method.Name is \"WithCancellationX\" or \"ConfigureAwait\" &&"
+  }
+]

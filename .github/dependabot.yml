@@ -1,0 +1,34 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      ef-core:
+        patterns: ["Microsoft.EntityFrameworkCore*", "Microsoft.AspNetCore.*"]
+      test:
+        patterns: ["xunit*", "Microsoft.NET.Test.Sdk", "coverlet.*"]
+    ignore:
+      # Each target framework pins its own EF Core and ASP.NET Core major (Directory.Packages.props); Dependabot does
+      # not see the conditions and would move the net8.0 and net9.0 pins to the newest major.
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types: ["version-update:semver-major"]
+      # The published libraries depend on the lowest supported EF Core patch on purpose.
+      - dependency-name: "Microsoft.EntityFrameworkCore.Relational"
+        update-types: ["version-update:semver-patch"]
+
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: weekly
+    groups:
+      docusaurus:
+        patterns: ["@docusaurus/*", "react", "react-dom"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

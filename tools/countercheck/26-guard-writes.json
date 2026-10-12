@@ -1,0 +1,20 @@
+[
+  {
+    "name": "The statements of one SaveChanges are one write (precision side)",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/NPlusOneCommandInterceptor.cs",
+    "old": "Interlocked.Exchange(ref save.Recorded, 1) == 1)",
+    "new": "Interlocked.Exchange(ref save.Recorded, 1) == 2)"
+  },
+  {
+    "name": "A transaction the code starts is a write",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/NPlusOneCommandInterceptor.cs",
+    "old": "            NPlusOneScope.RecordCommand(scope, NPlusOneSuspectKind.Write, \"BEGIN TRANSACTION\");\n",
+    "new": "            _ = scope;\n"
+  },
+  {
+    "name": "The transaction SaveChanges opens is not counted (precision side)",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/NPlusOneCommandInterceptor.cs",
+    "old": "(context is null || !Saving.TryGetValue(context, out _))",
+    "new": "(context is null || Saving.TryGetValue(context, out _) || true)"
+  }
+]

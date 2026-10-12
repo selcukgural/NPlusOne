@@ -1,0 +1,14 @@
+[
+  {
+    "name": "AddNewtonsoftJson switches MVC to Newtonsoft (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "ContainingType.Name: \"NewtonsoftJsonMvcBuilderExtensions\"",
+    "new": "ContainingType.Name: \"NewtonsoftJsonMvcBuilderExtensionsX\""
+  },
+  {
+    "name": "Only MVC actions switch; minimal APIs keep System.Text.Json",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "=> session.MvcUsesNewtonsoft && IsAction(owner, session.Symbols) ? JsonSerializerKind.Newtonsoft : JsonSerializerKind.SystemTextJson;",
+    "new": "=> session.MvcUsesNewtonsoft ? JsonSerializerKind.Newtonsoft : JsonSerializerKind.SystemTextJson;"
+  }
+]

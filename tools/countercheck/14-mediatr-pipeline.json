@@ -1,0 +1,50 @@
+[
+  {
+    "name": "CreateStream is a mediator call",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "\"Send\" or \"Publish\" or \"CreateStream\")",
+    "new": "\"Send\" or \"Publish\" or \"CreateStreamX\")"
+  },
+  {
+    "name": "Stream requests go to IStreamRequestHandler",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "\"CreateStream\" => handlerInterface == \"IStreamRequestHandler\",",
+    "new": "\"CreateStream\" => handlerInterface == \"IStreamRequestHandlerX\","
+  },
+  {
+    "name": "Send runs the pipeline behaviors",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "if (call == \"Send\" && mediatorNamespace == \"MediatR\"",
+    "new": "if (call == \"SendX\" && mediatorNamespace == \"MediatR\""
+  },
+  {
+    "name": "Only registered behaviors run (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "&& _registeredBehaviors.Value.Contains(type.OriginalDefinition))",
+    "new": "&& _registeredBehaviors.Value.Count >= 0)"
+  },
+  {
+    "name": "Only behaviors whose constraints accept the request run (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "if (!IsOrImplements(request, constraint))",
+    "new": "if (!IsOrImplements(request, constraint) && constraint.Name == \"X\")"
+  },
+  {
+    "name": "A closed behavior accepts its own request type only (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "            return IsOrImplements(request, accepted);\n",
+    "new": "            return true;\n"
+  },
+  {
+    "name": "typeof registers a behavior",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "TypeOfExpressionSyntax typeOf => [model.GetTypeInfo(typeOf.Type).Type],",
+    "new": "TypeOfExpressionSyntax typeOf => [],"
+  },
+  {
+    "name": "AddBehavior type arguments register a behavior",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "GenericNameSyntax { Identifier.ValueText: \"AddBehavior\" or \"AddOpenBehavior\" }",
+    "new": "GenericNameSyntax { Identifier.ValueText: \"AddBehaviorX\" or \"AddOpenBehavior\" }"
+  }
+]

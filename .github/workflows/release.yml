@@ -1,0 +1,77 @@
+name: Release
+
+# Publishes the packages to NuGet when a version tag (v1.0.0) is pushed. The version comes from the tag.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: read
+
+jobs:
+  # Builds, tests and packs with read-only permissions: restore and build run third-party code.
+  pack:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CI: 'true'
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Version
+        run: echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release -p:Version="$VERSION"
+
+      - name: Test
+        run: dotnet test --no-build -c Release
+
+      - name: Pack
+        run: dotnet pack --no-build -c Release -p:Version="$VERSION" -o artifacts
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages
+          path: artifacts/*.nupkg
+          retention-days: 30
+
+  # Pushes what the pack job built. NuGet trusted publishing: a short-lived key from this job's OIDC token, so no
+  # long-lived API key is stored anywhere; only this job, in the protected "nuget" environment, can mint it.
+  publish:
+    needs: pack
+    runs-on: ubuntu-latest
+    environment: nuget
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: packages
+          path: artifacts
+
+      - id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Push
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate

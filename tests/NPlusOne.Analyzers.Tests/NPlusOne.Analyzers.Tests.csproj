@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The tests compile corpus and inline sources against the EF Core and ASP.NET Core assemblies this
+    project loads, so no reference assemblies are downloaded at test time. Running on every target
+    frameworks checks the analyzer against EF Core 8, 9 and 10. The mapper (Mapperly too), mediator, validation, OData
+    and Newtonsoft.Json packages are referenced so the corpus uses their real APIs; SQLite runs the corpus against a real
+    database to prove each case at run time (GroundTruthTests).
+  -->
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Proxies" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="AutoMapper" />
+    <PackageReference Include="Mapster" />
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="Mediator.Abstractions" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="Microsoft.AspNetCore.OData" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" />
+    <PackageReference Include="Riok.Mapperly" GeneratePathProperty="true" />
+    <ProjectReference Include="../../src/NPlusOne.Analyzers/NPlusOne.Analyzers.csproj" />
+    <ProjectReference Include="../../src/NPlusOne.Analyzers.CodeFixes/NPlusOne.Analyzers.CodeFixes.csproj" />
+    <ProjectReference Include="../../src/NPlusOne.EntityFrameworkCore/NPlusOne.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+  <!--
+    AutoMapper 14 is the last MIT release; its advisory concerns mapping deeply nested objects at run
+    time. Here it only maps the ground truth's small seeded rows.
+  -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-rvv3-g6hj-g44x" />
+  </ItemGroup>
+
+  <!--
+    Mapperly writes its mapper methods with a source generator: the corpus compilation runs it (Roslyn 4.7 build, the
+    oldest the test's Roslyn 4.8 loads) next to the summary generator, so the generated methods are source like any other.
+  -->
+  <ItemGroup>
+    <None Include="$(PkgRiok_Mapperly)/analyzers/roslyn4.7/dotnet/cs/Riok.Mapperly.dll" Link="generators/Riok.Mapperly.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    Another N+1 analyzer, only run over the corpus by ComparisonTests (NPLUSONE_COMPARE=1); it never analyses this project.
+  -->
+  <ItemGroup>
+    <PackageReference Include="LinqContraband" ExcludeAssets="all" PrivateAssets="all" GeneratePathProperty="true" />
+    <!-- Runtime N+1 detectors, run over the corpus next to the guard by ComparisonTests. -->
+    <PackageReference Include="EFCore.QueryGuard" />
+    <PackageReference Include="DbEye" />
+    <PackageReference Include="MiniProfiler.EntityFrameworkCore" />
+    <None Include="$(PkgLinqContraband)/analyzers/dotnet/cs/LinqContraband.dll" Link="competitors/LinqContraband.dll" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="../../corpus/**/*.cs;../../corpus/**/.globalconfig;../../corpus/**/projects" LinkBase="corpus" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

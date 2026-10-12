@@ -1,0 +1,3 @@
+is_global = true
+# Lazy loading without the proxies package: only entities that take a lazy loader load lazily.
+harness.exclude_references = Microsoft.EntityFrameworkCore.Proxies

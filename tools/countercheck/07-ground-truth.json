@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Untracked entities never lazy-load (the EF Core 7 rule on EF Core 8+)",
+    "file": "src/NPlusOne.Analyzers/Model/EntityModel.cs",
+    "old": "_symbols.EfCoreMajorVersion >= 8",
+    "new": "_symbols.EfCoreMajorVersion >= 99"
+  },
+  {
+    "name": "Shadow foreign keys load when untracked (precision side)",
+    "file": "src/NPlusOne.Analyzers/Model/EntityModel.cs",
+    "old": "(element is not null || HasLoadableForeignKey(entity, property, target))",
+    "new": "(element is not null || true)"
+  },
+  {
+    "name": "Collection back-references skipped",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "!second.IsCollection && SymbolEqualityComparer",
+    "new": "SymbolEqualityComparer"
+  },
+  {
+    "name": "Reference back-references reported (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "!second.IsCollection && SymbolEqualityComparer.Default.Equals(second.Target, entity.OriginalDefinition)",
+    "new": "!second.IsCollection && false"
+  },
+  {
+    "name": "Request type of an object local not resolved",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "        return assigned ?? value.Type;",
+    "new": "        return value.Type;"
+  }
+]

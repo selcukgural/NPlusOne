@@ -1,0 +1,8 @@
+[
+  {
+    "name": "Types deriving from an entity are entities",
+    "file": "src/NPlusOne.Analyzers/Model/EntityModel.cs",
+    "old": "&& DerivesFromEntity(type, entities))",
+    "new": "&& DerivesFromEntity(type, entities) && type.Name == \"X\")"
+  }
+]

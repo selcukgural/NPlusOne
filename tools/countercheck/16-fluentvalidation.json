@@ -1,0 +1,20 @@
+[
+  {
+    "name": "MustAsync is a rule method",
+    "file": "src/NPlusOne.Analyzers/Analysis/IterationFinder.cs",
+    "old": "Name: \"Must\" or \"MustAsync\" or \"Custom\" or \"CustomAsync\"",
+    "new": "Name: \"Must\" or \"MustAsyncX\" or \"Custom\" or \"CustomAsync\""
+  },
+  {
+    "name": "Rule methods are FluentValidation's",
+    "file": "src/NPlusOne.Analyzers/Analysis/IterationFinder.cs",
+    "old": "method.ContainingNamespace?.ToDisplayString() != \"FluentValidation\"",
+    "new": "method.ContainingNamespace?.ToDisplayString() != \"FluentValidationX\""
+  },
+  {
+    "name": "Only rules chained on RuleForEach run per item (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/IterationFinder.cs",
+    "old": "if (chained.TargetMethod.Name == \"RuleForEach\")",
+    "new": "if (chained.TargetMethod.Name is \"RuleForEach\" or \"RuleFor\")"
+  }
+]

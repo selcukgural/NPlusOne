@@ -1,0 +1,20 @@
+[
+  {
+    "name": "A cache factory with a fixed key runs once (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/IterationFinder.cs",
+    "old": "if (CacheKey(site.Invocation) is { } key)",
+    "new": "if (CacheKey(site.Invocation) is { } key && key.Type is null)"
+  },
+  {
+    "name": "The key argument is found by name (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/IterationFinder.cs",
+    "old": "if (argument.Parameter?.Name == \"key\")",
+    "new": "if (argument.Parameter?.Name == \"keyX\")"
+  },
+  {
+    "name": "A key per element misses per element",
+    "file": "src/NPlusOne.Analyzers/Analysis/IterationFinder.cs",
+    "old": "&& region.Syntax.Span.Contains(location.SourceSpan))",
+    "new": "&& region.Syntax.Span.Contains(location.SourceSpan) && location.SourceSpan.Length < 0)"
+  }
+]

@@ -1,0 +1,9 @@
+<Project>
+  <!--
+    Lets the summary generator read NPlusOneEmitSummaries. Set it to false in a project to keep the
+    generator from writing that project's method summaries into its assembly.
+  -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="NPlusOneEmitSummaries" />
+  </ItemGroup>
+</Project>

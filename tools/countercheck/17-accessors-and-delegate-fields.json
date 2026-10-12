@@ -1,0 +1,44 @@
+[
+  {
+    "name": "A getter read in an iteration is checked",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "        CheckGetter(context, property);\n",
+    "new": ""
+  },
+  {
+    "name": "A getter read is a call in summaries",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryBuilder.cs",
+    "old": "if (BlockAnalyzer.RunGetter(property, session) is { } getter)",
+    "new": "if (BlockAnalyzer.RunGetter(property, session) is { } getter && getter.Name == \"X\")"
+  },
+  {
+    "name": "Assigning does not run the getter (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "&& !(property.Parent is ISimpleAssignmentOperation assignment && assignment.Target == property)",
+    "new": ""
+  },
+  {
+    "name": "Delegate fields are followed to their assignments",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "IFieldReferenceOperation field => AssignedValues(field.Field),",
+    "new": "IFieldReferenceOperation field => ImmutableArray<IOperation>.Empty,"
+  },
+  {
+    "name": "EF.CompileQuery makes a compiled query",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "TargetMethod: { Name: \"CompileQuery\" or \"CompileAsyncQuery\"",
+    "new": "TargetMethod: { Name: \"CompileQueryX\" or \"CompileAsyncQueryX\""
+  },
+  {
+    "name": "A compiled query called in an iteration queries",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (kind == EffectKind.Query && witness is null)",
+    "new": "if (kind == EffectKind.Save && witness is null)"
+  },
+  {
+    "name": "A compiled query called in a method is its query",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryBuilder.cs",
+    "old": "            _effects.Add(StoredCallbacks.CompiledQueryEffect(compile));\n",
+    "new": "            _ = compile;\n"
+  }
+]

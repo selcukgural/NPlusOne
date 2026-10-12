@@ -1,0 +1,36 @@
+name: False warning
+description: The analyzer reports an N+1 where there is none.
+labels: ["false positive"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you: every false warning becomes a test case and a fix. A small snippet that compiles is the most useful
+        thing you can send. Please leave out anything confidential (names, connection strings, data).
+  - type: input
+    id: rule
+    attributes:
+      label: Rule
+      placeholder: NP0002
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Code
+      description: The smallest code that shows the warning, with the entities and the query it depends on.
+      render: csharp
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it is not an N+1
+      description: What makes the round trip happen once, or not at all.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: NPlusOne.Analyzers 1.0.0, EF Core 9.0.x, .NET SDK 9.0.x

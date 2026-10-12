@@ -1,0 +1,98 @@
+[
+  {
+    "name": "IncludeMembers is read",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "case \"IncludeMembers\":",
+    "new": "case \"IncludeMembersX\":"
+  },
+  {
+    "name": "Members the source cannot fill come from the included members",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "AddUnique(paths, IncludedMemberReads(map, member));",
+    "new": "AddUnique(paths, IncludedMemberReads(map, member).Take(0));"
+  },
+  {
+    "name": "Conventions apply below an included member",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "yield return path + \".\" + read;",
+    "new": "yield return path;"
+  },
+  {
+    "name": "An included member's type is the member's, not object",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "Operations.StripConversions(Operations.LambdaResult(lambda))?.Type is { } type",
+    "new": "Operations.LambdaResult(lambda)?.Type is { } type"
+  },
+  {
+    "name": "ForPath is read",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "case \"ForPath\" when",
+    "new": "case \"ForPathX\" when"
+  },
+  {
+    "name": "An ignored ForPath takes its root from the conventions (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "var options = pathMapped ?? MemberOverride.Empty;\n",
+    "new": "var options = pathMapped;\n                if (options is null)\n                {\n                    return;\n                }\n\n"
+  },
+  {
+    "name": "Resolvers and converters are AutoMapper callbacks",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "candidate.ContainingNamespace?.ToDisplayString() != \"AutoMapper\"",
+    "new": "candidate.ContainingNamespace?.ToDisplayString() != \"AutoMapperX\""
+  },
+  {
+    "name": "A member value resolver reads on the source member",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "callbacks.Add(new MapperCallback(resolve, 2, sourceMember));",
+    "new": "callbacks.Add(new MapperCallback(resolve, 0, sourceMember));"
+  },
+  {
+    "name": "A converter replaces the whole map (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "if (map.Converter is { } converter)",
+    "new": "if (map.Converter is { } converter && converter.Paths.Length > 99)"
+  },
+  {
+    "name": "ConvertUsing ends the chain but is read",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "|| chained.TargetMethod.Name == \"ConvertUsing\"",
+    "new": "|| chained.TargetMethod.Name == \"ConvertUsingX\""
+  },
+  {
+    "name": "Type converters are found",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "CallbackOf(converter, \"ITypeConverter\")",
+    "new": "CallbackOf(converter, \"ITypeConverterX\")"
+  },
+  {
+    "name": "Conversion lambdas are read",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "? new MemberOverride(NavigationPaths(lambda), ImmutableArray<MapperCallback>.Empty)\n            : MemberOverride.Empty;",
+    "new": "? MemberOverride.Empty\n            : MemberOverride.Empty;"
+  },
+  {
+    "name": "Callbacks that query are reported",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (queried.Add(callback.Method)",
+    "new": "if (callback.Ordinal > 99 && queried.Add(callback.Method)"
+  },
+  {
+    "name": "Navigations callbacks read count",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "session.NavigationReadsOf(callback.Method, callback.Ordinal)",
+    "new": "session.NavigationReadsOf(callback.Method, callback.Ordinal + 10)"
+  },
+  {
+    "name": "Map passed as a method group maps each element",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (Mappings.LibraryOf(group) is { } library && group.TypeArguments.Length > 0",
+    "new": "if (Mappings.LibraryOf(group) is { } library && group.TypeArguments.Length > 9"
+  },
+  {
+    "name": "Options without MapFrom or Ignore leave the member to the conventions",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "            mapped = new MemberOverride(paths, callbacks.ToImmutable());\n            return true;\n        }\n\n        return false;",
+    "new": "            mapped = new MemberOverride(paths, callbacks.ToImmutable());\n            return true;\n        }\n\n        mapped = MemberOverride.Empty;\n        return true;"
+  }
+]

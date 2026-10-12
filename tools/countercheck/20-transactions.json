@@ -1,0 +1,14 @@
+[
+  {
+    "name": "Database.BeginTransaction starts a transaction",
+    "file": "src/NPlusOne.Analyzers/Analysis/QueryCalls.cs",
+    "old": "            return IsBeginTransaction(method) ? new QueryCall(QueryCallKind.Save) : QueryCall.None;\n",
+    "new": "            return QueryCall.None;\n"
+  },
+  {
+    "name": "The relational BeginTransaction(IsolationLevel) starts one too",
+    "file": "src/NPlusOne.Analyzers/Analysis/QueryCalls.cs",
+    "old": "                    : IsBeginTransaction(method)\n                        ? new QueryCall(QueryCallKind.Save)\n                        : QueryCall.None;",
+    "new": "                    : QueryCall.None;"
+  }
+]

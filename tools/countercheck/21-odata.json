@@ -1,0 +1,14 @@
+[
+  {
+    "name": "[EnableQuery] actions are not serialized by the endpoint serializer (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "enableQuery.ContainingNamespace?.ToDisplayString() == \"Microsoft.AspNetCore.OData.Query\"",
+    "new": "enableQuery.ContainingNamespace?.ToDisplayString() == \"Microsoft.AspNetCore.OData.QueryX\""
+  },
+  {
+    "name": "[EnableQuery] on the controller counts (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "=> HasEnableQueryAttribute(symbol) || symbol.ContainingType is { } controller && HasEnableQueryAttribute(controller);",
+    "new": "=> HasEnableQueryAttribute(symbol);"
+  }
+]

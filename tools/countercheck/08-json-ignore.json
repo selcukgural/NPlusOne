@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Ignored first-level navigations skipped",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (!LoadsLazily(first, source) || JsonIgnores.Skips(first.Property, serializer))",
+    "new": "if (!LoadsLazily(first, source))"
+  },
+  {
+    "name": "Ignored second-level navigations skipped",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (!LoadsLazily(second, source) || JsonIgnores.Skips(second.Property, serializer)",
+    "new": "if (!LoadsLazily(second, source)"
+  },
+  {
+    "name": "Conditions that read the value still load (recall side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/JsonIgnores.cs",
+    "old": "return ConditionName(attribute) is null or \"Always\";",
+    "new": "return ConditionName(attribute) is not \"Never\";"
+  },
+  {
+    "name": "No condition means Always",
+    "file": "src/NPlusOne.Analyzers/Analysis/JsonIgnores.cs",
+    "old": "return ConditionName(attribute) is null or \"Always\";",
+    "new": "return ConditionName(attribute) is \"Always\";"
+  },
+  {
+    "name": "Condition read by name",
+    "file": "src/NPlusOne.Analyzers/Analysis/JsonIgnores.cs",
+    "old": "Equals(field.ConstantValue, value)",
+    "new": "!Equals(field.ConstantValue, value)"
+  },
+  {
+    "name": "Newtonsoft's JsonIgnore",
+    "file": "src/NPlusOne.Analyzers/Analysis/JsonIgnores.cs",
+    "old": "name is \"Newtonsoft.Json.JsonIgnoreAttribute\" or",
+    "new": "name is \"Newtonsoft.Json.JsonIgnoreAttributeX\" or"
+  },
+  {
+    "name": "IgnoreDataMember for Newtonsoft",
+    "file": "src/NPlusOne.Analyzers/Analysis/JsonIgnores.cs",
+    "old": "or \"System.Runtime.Serialization.IgnoreDataMemberAttribute\"",
+    "new": "or \"System.Runtime.Serialization.IgnoreDataMemberAttributeX\""
+  },
+  {
+    "name": "Newtonsoft attributes bind only Newtonsoft (recall side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/JsonIgnores.cs",
+    "old": "if (serializer == JsonSerializerKind.Newtonsoft && name is",
+    "new": "if (name is"
+  },
+  {
+    "name": "System.Text.Json's attribute binds only System.Text.Json (recall side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/JsonIgnores.cs",
+    "old": "if (serializer == JsonSerializerKind.SystemTextJson && name ==",
+    "new": "if (name =="
+  },
+  {
+    "name": "JsonConvert serializes with Newtonsoft",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "\"Newtonsoft.Json.JsonConvert\" when method.Name == \"SerializeObject\" => JsonSerializerKind.Newtonsoft",
+    "new": "\"Newtonsoft.Json.JsonConvert\" when method.Name == \"SerializeObject\" => JsonSerializerKind.SystemTextJson"
+  }
+]

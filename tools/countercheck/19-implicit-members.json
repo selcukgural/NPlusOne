@@ -1,0 +1,80 @@
+[
+  {
+    "name": "Interpolations are checked",
+    "file": "src/NPlusOne.Analyzers/NPlusOneAnalyzer.cs",
+    "old": "            block.RegisterOperationAction(analyzer.OnInterpolation, OperationKind.Interpolation);\n",
+    "new": ""
+  },
+  {
+    "name": "Conversions are checked",
+    "file": "src/NPlusOne.Analyzers/NPlusOneAnalyzer.cs",
+    "old": "            block.RegisterOperationAction(analyzer.OnConversion, OperationKind.Conversion);\n",
+    "new": ""
+  },
+  {
+    "name": "HashSet creations are checked",
+    "file": "src/NPlusOne.Analyzers/NPlusOneAnalyzer.cs",
+    "old": "            block.RegisterOperationAction(analyzer.OnObjectCreation, OperationKind.ObjectCreation);\n",
+    "new": ""
+  },
+  {
+    "name": "Distinct hashes its elements",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.ImplicitMembers.cs",
+    "old": "[\"Distinct\", \"ToHashSet\"",
+    "new": "[\"DistinctX\", \"ToHashSet\""
+  },
+  {
+    "name": "An entity passed as object to a formatting call is formatted",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.ImplicitMembers.cs",
+    "old": "else if (value is IConversionOperation { Type.SpecialType: SpecialType.System_Object })",
+    "new": "else if (value is IConversionOperation { Type.SpecialType: SpecialType.System_String })"
+  },
+  {
+    "name": "string.Join formats every element",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.ImplicitMembers.cs",
+    "old": "&& method.Name is \"Join\" or \"Concat\")",
+    "new": "&& method.Name is \"JoinX\" or \"Concat\")"
+  },
+  {
+    "name": "TextWriter and its subclasses format",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.ImplicitMembers.cs",
+    "old": "InheritsFrom(type, \"System.IO.TextWriter\")",
+    "new": "InheritsFrom(type, \"System.IO.TextWriterX\")"
+  },
+  {
+    "name": "A record's generated ToString reads every navigation",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.ImplicitMembers.cs",
+    "old": "member is { IsImplicitlyDeclared: true, Name: \"ToString\", ContainingType.IsRecord: true }",
+    "new": "member is { IsImplicitlyDeclared: true, Name: \"ToStringX\", ContainingType.IsRecord: true }"
+  },
+  {
+    "name": "A property pattern's input is an element",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "IInstanceReferenceOperation input when Operations.PatternInput(input) is { } patterned => ElementOf(patterned, hops),",
+    "new": "IInstanceReferenceOperation input when Operations.PatternInput(input) is { } patterned => null,"
+  },
+  {
+    "name": "A nested pattern's input is the outer member",
+    "file": "src/NPlusOne.Analyzers/Analysis/Operations.cs",
+    "old": "                case IPropertySubpatternOperation subpattern:\n                    return subpattern.Member;",
+    "new": "                case IPropertySubpatternOperation subpattern:\n                    return null;"
+  },
+  {
+    "name": "A pattern input traces to the matched value",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "IInstanceReferenceOperation input when Operations.PatternInput(input) is { } patterned => Trace(patterned, depth),",
+    "new": "IInstanceReferenceOperation input when Operations.PatternInput(input) is { } patterned => SourceInfo.Unknown,"
+  },
+  {
+    "name": "A walk steps the same local (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.ImplicitMembers.cs",
+    "old": "                    && SymbolEqualityComparer.Default.Equals(target.Local, local.Local)\n",
+    "new": "                    && target.Local is not null\n"
+  },
+  {
+    "name": "A walk starts where the local was before the loop",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "var owner = walk is null ? _tracer.Trace(current) : WalkStart((ILocalReferenceOperation)Operations.StripConversions(current)!);",
+    "new": "var owner = _tracer.Trace(current);"
+  }
+]

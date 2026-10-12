@@ -1,0 +1,62 @@
+[
+  {
+    "name": "A part read on a lambda's element is followed",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "&& IsBuiltPerElement(ElementParts.Resolve(sequence, member), hops)",
+    "new": "&& sequence is null"
+  },
+  {
+    "name": "A lambda's part must be built per element (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "&& IsBuiltPerElement(ElementParts.Resolve(sequence, member), hops)",
+    "new": "&& ElementParts.Resolve(sequence, member) is not null"
+  },
+  {
+    "name": "A lambda's part traces to what built it",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "=> TraceResolved(ElementParts.Resolve(sequence, member), depth),",
+    "new": "=> SourceInfo.Unknown,"
+  },
+  {
+    "name": "Zip pairs elements of its sequences",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "case \"Zip\" when",
+    "new": "case \"ZipX\" when"
+  },
+  {
+    "name": "A KeyValuePair built in Select holds its value",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "\"Value\" => 1,",
+    "new": "\"Value\" => 0,"
+  },
+  {
+    "name": "A constructor argument fills the member of its name",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "if (string.Equals(argument.Parameter?.Name, member, StringComparison.OrdinalIgnoreCase))",
+    "new": "if (string.Equals(argument.Parameter?.Name + \"X\", member, StringComparison.OrdinalIgnoreCase))"
+  },
+  {
+    "name": "Record and auto-property members are parts",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "&& (property.ContainingType.IsRecord || Session.IsAutoProperty(property))",
+    "new": "&& property.ContainingType.Name == \"X\""
+  },
+  {
+    "name": "A record's Deconstruct names its parts",
+    "file": "src/NPlusOne.Analyzers/Analysis/ElementParts.cs",
+    "old": "{ } element => DeconstructedName(element, i, tuple.Elements.Length),",
+    "new": "{ } element => null,"
+  },
+  {
+    "name": "An index stepped in a while loop moves per iteration",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "&& SteppedInBody(index, whileLoop) is { } stepped)",
+    "new": "&& SteppedInBody(index, whileLoop) is { } stepped && stepped.Name == \"X\")"
+  },
+  {
+    "name": "The index must use the stepped local (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "        foreach (var operation in index.DescendantsAndSelf())\n        {\n            if (operation is not ILocalReferenceOperation reference || loop.Locals.Contains(reference.Local, SymbolEqualityComparer.Default))",
+    "new": "        foreach (var operation in index.DescendantsAndSelf().Concat(loop.Body.DescendantsAndSelf()))\n        {\n            if (operation is not ILocalReferenceOperation reference || loop.Locals.Contains(reference.Local, SymbolEqualityComparer.Default))"
+  }
+]

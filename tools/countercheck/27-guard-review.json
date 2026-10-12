@@ -1,0 +1,74 @@
+[
+  {
+    "name": "Disposing an inner scope skips an outer one already disposed",
+    "file": "src/NPlusOne.EntityFrameworkCore/NPlusOneScope.cs",
+    "old": "while (parent is not null && parent.IsDisposed)",
+    "new": "while (parent is not null && parent.IsDisposed && parent._parent == parent)"
+  },
+  {
+    "name": "Lazy loads count only for contexts with the guard (precision side)",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/LazyLoadListener.cs",
+    "old": "if (scope is null || !UsesGuard(data.Context))",
+    "new": "if (scope is null)"
+  },
+  {
+    "name": "A failure while recording does not fail the command",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/NPlusOneCommandInterceptor.cs",
+    "old": "#pragma warning disable CA1031 // Recording must never break the command it observes.\n        catch (Exception)\n#pragma warning restore CA1031\n        {\n        }",
+    "new": "#pragma warning disable CA1031 // Recording must never break the command it observes.\n        catch (Exception)\n#pragma warning restore CA1031\n        {\n            throw;\n        }"
+  },
+  {
+    "name": "A cancelled SaveChangesAsync ends its tracking",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/NPlusOneCommandInterceptor.cs",
+    "old": "    public Task SaveChangesCanceledAsync(DbContextEventData eventData, CancellationToken cancellationToken = default)\n    {\n        EndSave(eventData.Context);",
+    "new": "    public Task SaveChangesCanceledAsync(DbContextEventData eventData, CancellationToken cancellationToken = default)\n    {\n        _ = eventData;"
+  },
+  {
+    "name": "Backslash escapes keep a literal going (privacy)",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "            if (sql[i] == '\\\\')\n            {\n                i++;\n            }",
+    "new": "            if (sql[i] == '\\\\' && i < 0)\n            {\n                i++;\n            }"
+  },
+  {
+    "name": "Dollar quotes are literals (privacy)",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "else if (c == '$' && DollarTag(sql, i) is { } tag)",
+    "new": "else if (c == '#' && DollarTag(sql, i) is { } tag)"
+  },
+  {
+    "name": "Block comments nest (privacy)",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "            if (sql[i] == '/' && sql[i + 1] == '*')\n            {\n                depth++;",
+    "new": "            if (sql[i] == '/' && sql[i + 1] == '*' && depth == 0)\n            {\n                depth++;"
+  },
+  {
+    "name": "Double-quoted values are hidden (privacy)",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "output.Append(IsPlainIdentifier(content) && close >= 0 ? sql.AsSpan(i, end - i) : \"?\");",
+    "new": "output.Append(close >= 0 ? sql.AsSpan(i, end - i) : \"?\");"
+  },
+  {
+    "name": "Plain double-quoted identifiers stay (precision side)",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "output.Append(IsPlainIdentifier(content) && close >= 0 ? sql.AsSpan(i, end - i) : \"?\");",
+    "new": "output.Append(content.IsEmpty && close >= 0 ? sql.AsSpan(i, end - i) : \"?\");"
+  },
+  {
+    "name": "Oracle q-quotes are literals (privacy)",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "'N' or 'E' or 'X' or 'B' or 'Q' => At(sql, index + 1, '\\''),",
+    "new": "'N' or 'E' or 'X' or 'B' => At(sql, index + 1, '\\''),"
+  },
+  {
+    "name": "Negative numbers collapse in IN lists",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "(?:@p|-?\\?|NULL)(?:\\s*,\\s*(?:@p|-?\\?|NULL))*",
+    "new": "(?:@p|\\?|NULL)(?:\\s*,\\s*(?:@p|\\?|NULL))*"
+  },
+  {
+    "name": "WebSocket requests are not watched (precision side)",
+    "file": "src/NPlusOne.AspNetCore/NPlusOneGuardMiddleware.cs",
+    "old": "if (context.WebSockets.IsWebSocketRequest)",
+    "new": "if (context.WebSockets.IsWebSocketRequest && context.Items.Count < 0)"
+  }
+]

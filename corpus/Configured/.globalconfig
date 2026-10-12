@@ -1,0 +1,5 @@
+is_global = true
+nplusone.query_methods = Corpus.ICustomerRepository.GetByIdAsync; Corpus.Configured.ILegacyGateway.*
+nplusone.ignored_methods = Corpus.Configured.CachedLookup.*
+nplusone.iterating_methods = Corpus.Configured.Batch.Each
+nplusone.data_access_types = *Gateway

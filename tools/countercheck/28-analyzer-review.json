@@ -1,0 +1,56 @@
+[
+  {
+    "name": "The Include fix goes after FromSql, which only takes a DbSet",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "\"FromSqlRaw\" or \"FromSqlInterpolated\" or \"FromSql\" => source with { Root = invocation.Syntax.GetLocation() },",
+    "new": "\"FromSqlRaw\" or \"FromSqlInterpolated\" or \"FromSql\" => source,"
+  },
+  {
+    "name": "Only System and System.* are framework assemblies, not SystemData",
+    "file": "src/NPlusOne.Analyzers/Model/EntityModel.cs",
+    "old": "if (name.StartsWith(prefix, StringComparison.Ordinal) && (name.Length == prefix.Length || name[prefix.Length] == '.'))",
+    "new": "if (name.StartsWith(prefix, StringComparison.Ordinal))"
+  },
+  {
+    "name": "A loop over a failed save's conflict entries is not per element (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Exemptions.cs",
+    "old": "if (iteration.IsBatched || IsLoadOnce(operation) || HandlesConflictEntries(iteration.Region))",
+    "new": "if (iteration.IsBatched || IsLoadOnce(operation))"
+  },
+  {
+    "name": "A loop that reads a page per iteration is paged (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Exemptions.cs",
+    "old": "return shape.IsPaged || ReadsPages(loop) || Waits(loop)",
+    "new": "return shape.IsPaged || Waits(loop)"
+  },
+  {
+    "name": "A PeriodicTimer tick is a wait (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Exemptions.cs",
+    "old": "Name: \"WaitForNextTickAsync\", ContainingType.Name: \"PeriodicTimer\"",
+    "new": "Name: \"WaitForNextTickAsyncNever\", ContainingType.Name: \"PeriodicTimer\""
+  },
+  {
+    "name": "A retried save is not per element (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Exemptions.cs",
+    "old": "|| Waits(loop) || IsRetry(operation, loop) || IsSearch",
+    "new": "|| Waits(loop) || IsSearch"
+  },
+  {
+    "name": "A try around each element's save is not a retry (recall)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Exemptions.cs",
+    "old": "    private static bool IsRetry(IOperation operation, ILoopOperation loop)\n    {\n        if (WalksCollection(loop))\n        {\n            return false;\n        }\n",
+    "new": "    private static bool IsRetry(IOperation operation, ILoopOperation loop)\n    {\n"
+  },
+  {
+    "name": "LINQ's Take does not walk a collection (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Exemptions.cs",
+    "old": "ContainingType.Name: not (\"Queryable\" or \"Enumerable\" or \"AsyncEnumerable\")",
+    "new": "ContainingType.Name: not \"Never\""
+  },
+  {
+    "name": "A save that uses a local of the loop is not moved",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "iteration.Region is IForEachLoopOperation && !UsesLocalsOf(invocation, iteration.Region)",
+    "new": "iteration.Region is IForEachLoopOperation"
+  }
+]

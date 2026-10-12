@@ -1,0 +1,68 @@
+[
+  {
+    "name": "Delegate calls in loops not checked",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "            CheckStoredDelegate(context, invocation);\n",
+    "new": ""
+  },
+  {
+    "name": "Stored lambdas not followed",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "witness ??= session.FindWitnessInBody(lambda.Body, lambda.Symbol, arguments, kind);",
+    "new": "witness ??= null;"
+  },
+  {
+    "name": "Stored method groups not followed",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "witness ??= session.FindWitness(target, arguments, kind);",
+    "new": "witness ??= null;"
+  },
+  {
+    "name": "Lambda summary walks past its own body",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryBuilder.cs",
+    "old": "for (var current = operation.Parent; current is not null && current != body; current = current.Parent)",
+    "new": "for (var current = operation.Parent; current is not null && (current != body || current == body); current = current.Parent)"
+  },
+  {
+    "name": "Query fields not traced",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "? SourceInfo.EfQueryAt(field) : session.AssignedSource(field.Field),",
+    "new": "? SourceInfo.EfQueryAt(field) : SourceInfo.Unknown,"
+  },
+  {
+    "name": "Auto-properties not traced",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "return Session.IsAutoProperty(property.Property) ? session.AssignedSource(property.Property) : SourceInfo.Unknown;",
+    "new": "return SourceInfo.Unknown;"
+  },
+  {
+    "name": "Field assignments all assumed EF (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "result = result.Combine(tracer.Trace(value));",
+    "new": "result = result.Combine(SourceInfo.EfQuery);"
+  },
+  {
+    "name": "Mutual recursion not followed",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (DirectQuery(self) is { } own && session.Reaches(callee, self, session.Settings.MaxCallDepth))",
+    "new": "if (DirectQuery(self) is { } own && false)"
+  },
+  {
+    "name": "Mutual recursion reported at every call of the cycle (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (DirectQuery(self) is { } own && session.Reaches(callee, self, session.Settings.MaxCallDepth))",
+    "new": "if (session.FindWitness(self, arguments, EffectKind.Query) is { } own && session.Reaches(callee, self, session.Settings.MaxCallDepth))"
+  },
+  {
+    "name": "Serializer calls not checked",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "        CheckSerializerCall(context, invocation);\n",
+    "new": ""
+  },
+  {
+    "name": "Serialized value seen as object",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "        value = unwrapped;\n",
+    "new": ""
+  }
+]

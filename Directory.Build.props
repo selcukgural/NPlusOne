@@ -1,0 +1,76 @@
+<Project>
+  <!--
+    Single place for build settings. Project files only declare what is specific to them
+    (target frameworks, output type, project references, packages nobody else needs). Package
+    versions live in Directory.Packages.props.
+  -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+
+    <!-- Analyzers: the recommended rule set plus .editorconfig style rules, violations fail the build. -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- Every public member needs an XML comment (CS1591 becomes an error through TreatWarningsAsErrors). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Restore exactly what the lock file says, so CI and local builds see the same packages. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+  </PropertyGroup>
+
+  <!--
+    Shipped builds: the PDB goes inside the assembly (the analyzer ships no symbols package), sources are linked to the
+    commit through Source Link, and CI builds strip local paths.
+  -->
+  <PropertyGroup>
+    <DebugType>embedded</DebugType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- The published libraries build against the lowest EF Core patch they support (Directory.Packages.props). -->
+    <NPlusOneLibrary Condition="$(MSBuildProjectDirectory.Replace('\', '/').Contains('/src/'))">true</NPlusOneLibrary>
+  </PropertyGroup>
+
+  <!-- Package metadata shared by every published package. -->
+  <PropertyGroup>
+    <VersionPrefix>1.0.0</VersionPrefix>
+    <PackageIcon>icon.png</PackageIcon>
+    <Authors>Selçuk GÜRAL</Authors>
+    <Copyright>Copyright (c) 2026 Selçuk GÜRAL</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/selcukgural/NPlusOne</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/selcukgural/NPlusOne</RepositoryUrl>
+    <PackageTags>n+1;nplusone;entity-framework-core;efcore;roslyn;analyzer;performance;orm</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)docs/icon.png" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <IsTestProject Condition="$(MSBuildProjectName.EndsWith('.Tests'))">true</IsTestProject>
+  </PropertyGroup>
+
+  <!-- Test projects: packages and usings come from here, test names document the behaviour. -->
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);CS1591;CA1707</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

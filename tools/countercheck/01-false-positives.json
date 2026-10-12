@@ -1,0 +1,38 @@
+[
+  {
+    "name": "AutoInclude ignored",
+    "file": "src/NPlusOne.Analyzers/Model/EntityModel.cs",
+    "old": "var autoIncluded = _autoIncluded.Value.Contains(property.OriginalDefinition);",
+    "new": "var autoIncluded = false;"
+  },
+  {
+    "name": "AsNoTracking not marked",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "\"AsNoTracking\" or \"AsNoTrackingWithIdentityResolution\" => source with { Untracked = true },",
+    "new": ""
+  },
+  {
+    "name": "AsTracking does not turn tracking back on",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "\"AsTracking\" => source with { Untracked = false },",
+    "new": ""
+  },
+  {
+    "name": "IgnoreAutoIncludes ignored",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "\"IgnoreAutoIncludes\" => source with { IgnoresAutoIncludes = true },",
+    "new": ""
+  },
+  {
+    "name": "LazyLoadingEnabled = false ignored",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "&& assignment.Syntax.SpanStart < position)",
+    "new": "&& assignment.Syntax.SpanStart < 0)"
+  },
+  {
+    "name": "NP0005 reports untracked results",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (source.Kind != OriginKind.Ef || source.Untracked)",
+    "new": "if (source.Kind != OriginKind.Ef)"
+  }
+]

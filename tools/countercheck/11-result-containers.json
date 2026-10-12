@@ -1,0 +1,56 @@
+[
+  {
+    "name": "Anonymous object members are walked",
+    "file": "src/NPlusOne.Analyzers/Analysis/SerializedMembers.cs",
+    "old": "if (value is IAnonymousObjectCreationOperation anonymous)",
+    "new": "if (value is IAnonymousObjectCreationOperation anonymous && anonymous.Initializers.Length > 99)"
+  },
+  {
+    "name": "Constructor arguments go to the property of the same name",
+    "file": "src/NPlusOne.Analyzers/Analysis/SerializedMembers.cs",
+    "old": "SerializedProperty(type, parameter.Name, serializer) is { } property",
+    "new": "SerializedProperty(type, parameter.Name + \"X\", serializer) is { } property"
+  },
+  {
+    "name": "Parameter and property names match case aside",
+    "file": "src/NPlusOne.Analyzers/Analysis/SerializedMembers.cs",
+    "old": "StringComparison.OrdinalIgnoreCase",
+    "new": "StringComparison.Ordinal"
+  },
+  {
+    "name": "Object initializer properties are walked",
+    "file": "src/NPlusOne.Analyzers/Analysis/SerializedMembers.cs",
+    "old": "&& IsSerialized(target.Property, serializer))",
+    "new": "&& IsSerialized(target.Property, serializer) && target.Property.Name == \"X\")"
+  },
+  {
+    "name": "Locals are followed to their only assignment",
+    "file": "src/NPlusOne.Analyzers/Analysis/SerializedMembers.cs",
+    "old": "if (value is ILocalReferenceOperation local)",
+    "new": "if (value is ILocalReferenceOperation { Local.Name: \"none\" } local)"
+  },
+  {
+    "name": "Ignored properties are not walked (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/SerializedMembers.cs",
+    "old": "&& !JsonIgnores.Skips(property, serializer);",
+    "new": "&& (serializer != JsonSerializerKind.Newtonsoft || !JsonIgnores.Skips(property, serializer));"
+  },
+  {
+    "name": "Non-public properties are not walked (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/SerializedMembers.cs",
+    "old": "property is { DeclaredAccessibility: Accessibility.Public, IsStatic: false, IsIndexer: false, GetMethod.DeclaredAccessibility: Accessibility.Public }",
+    "new": "property is { IsStatic: false, IsIndexer: false, GetMethod: not null }"
+  },
+  {
+    "name": "Containers nest",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (depth < 3)",
+    "new": "if (depth < 1)"
+  },
+  {
+    "name": "Container members are checked",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "CheckSerializedValue(context, site, held, SourceTracer.Join(member, name), depth + 1);",
+    "new": "_ = held;"
+  }
+]

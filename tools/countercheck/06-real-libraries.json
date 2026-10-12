@@ -1,0 +1,98 @@
+[
+  {
+    "name": "Mediator commands and queries not followed",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "? handlerInterface is \"IRequestHandler\" or \"ICommandHandler\" or \"IQueryHandler\"",
+    "new": "? handlerInterface is \"IRequestHandler\""
+  },
+  {
+    "name": "MapsterMapper.IMapper not recognised",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "(\"MapsterMapper\", \"Map\") or (\"Mapster\", \"Adapt\") => MapperLibrary.Mapster,",
+    "new": "(\"Mapster\", \"Adapt\") => MapperLibrary.Mapster,"
+  },
+  {
+    "name": "Mapster configuration not read",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "            (\"Mapster\", \"NewConfig\" or \"ForType\", \"TypeAdapterSetter\") => MapperLibrary.Mapster,\n",
+    "new": ""
+  },
+  {
+    "name": "Mapster Map override not read",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "            overrides[member] = NavigationPaths(sourceLambda);\n            return;\n        }\n\n        if (call.TargetMethod.Name != \"Ignore\")",
+    "new": "            overrides[member] = ImmutableArray<string>.Empty;\n            return;\n        }\n\n        if (call.TargetMethod.Name != \"Ignore\")"
+  },
+  {
+    "name": "Mapster Ignore not honoured (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "                    overrides[ignored] = null;",
+    "new": "                    _ = ignored;"
+  },
+  {
+    "name": "AutoMapper chain read only through ForMember (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "chained.Instance == current && SymbolEqualityComparer.Default.Equals(chained.Type, expression);",
+    "new": "chained.Instance == current && chained.TargetMethod.Name is \"ForMember\" or \"Map\" or \"Ignore\";"
+  },
+  {
+    "name": "AutoMapper chain continues past ReverseMap",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "chained.Instance == current && SymbolEqualityComparer.Default.Equals(chained.Type, expression);",
+    "new": "chained.Instance == current;"
+  },
+  {
+    "name": "Every navigation of a lazy-loader entity lazy (precision side)",
+    "file": "src/NPlusOne.Analyzers/Model/EntityModel.cs",
+    "old": "(loaderMembers is not null && AsksLoader(property, loaderMembers))",
+    "new": "loaderMembers is not null"
+  },
+  {
+    "name": "Typed hub clients not checked",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "        if (IsTypedHubClientCall(invocation))",
+    "new": "        if (false && IsTypedHubClientCall(invocation))"
+  },
+  {
+    "name": "Hub methods not endpoints",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": " || IsHubMethod(owner, session.Symbols)",
+    "new": ""
+  },
+  {
+    "name": "Private hub methods counted (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "symbol is IMethodSymbol { MethodKind: MethodKind.Ordinary, IsStatic: false, DeclaredAccessibility: Accessibility.Public } method\n           && method.ContainingType is { TypeKind: TypeKind.Class, IsAbstract: false } type\n           && KnownSymbols.InheritsFrom(type, symbols.Hub);",
+    "new": "symbol is IMethodSymbol { MethodKind: MethodKind.Ordinary, IsStatic: false } method\n           && method.ContainingType is { TypeKind: TypeKind.Class, IsAbstract: false } type\n           && KnownSymbols.InheritsFrom(type, symbols.Hub);"
+  },
+  {
+    "name": "Minimal API method-group handlers not endpoints",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": " || session.IsEndpointHandler(owner)",
+    "new": ""
+  },
+  {
+    "name": "Views treated as serialized (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "        if (method.ReturnType.Name is \"ViewResult\" or \"PartialViewResult\" or \"ViewComponentResult\")",
+    "new": "        if (method.ReturnType.Name is \"NotAViewResult\")"
+  },
+  {
+    "name": "Created result objects not unwrapped",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "            if (current is IObjectCreationOperation",
+    "new": "            if (false && current is IObjectCreationOperation"
+  },
+  {
+    "name": "JsonResult not a serializing result",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "\n           || KnownSymbols.InheritsFrom(type, session.Symbols.JsonResult);",
+    "new": ";"
+  },
+  {
+    "name": "DbSet.AsAsyncEnumerable not traced",
+    "file": "src/NPlusOne.Analyzers/Analysis/QueryCalls.cs",
+    "old": "                \"AsAsyncEnumerable\" => new QueryCall(QueryCallKind.Compose, source),\n",
+    "new": "                \"NotAsAsyncEnumerable\" => new QueryCall(QueryCallKind.Compose, source),\n"
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Calls in expression trees are checked",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "            CheckClientProjection(context, invocation);\n            return;",
+    "new": "            return;"
+  },
+  {
+    "name": "Only the final Select runs on the client (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "site.Invocation.TargetMethod is not { Name: \"Select\", ContainingType: { } type }",
+    "new": "site.Invocation.TargetMethod is not { ContainingType: { } type }"
+  },
+  {
+    "name": "Queries of the called method repeat per row",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (session.FindWitness(method, traced, EffectKind.Query) is { } query)",
+    "new": "if (session.FindWitness(method, traced, EffectKind.Save) is { } query)"
+  },
+  {
+    "name": "Navigations the called method reads load per row",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "foreach (var read in session.NavigationReadsOf(method, parameter.Ordinal))",
+    "new": "foreach (var read in session.NavigationReadsOf(method, parameter.Ordinal + 10))"
+  },
+  {
+    "name": "The row parameter is the query's element",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "                    ? rows\n",
+    "new": "                    ? SourceInfo.Unknown\n"
+  }
+]

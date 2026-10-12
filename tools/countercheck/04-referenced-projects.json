@@ -1,0 +1,80 @@
+[
+  {
+    "name": "Generator writes nothing",
+    "file": "src/NPlusOne.Analyzers/NPlusOneSummaryGenerator.cs",
+    "old": "        output.AddSource(\"NPlusOne.Summaries.g.cs\", source.ToString());",
+    "new": "        _ = source;"
+  },
+  {
+    "name": "Referenced summaries not read",
+    "file": "src/NPlusOne.Analyzers/Analysis/ReferencedSummaries.cs",
+    "old": "                    facts[Key(name, member)] = value;",
+    "new": "                    _ = value;"
+  },
+  {
+    "name": "Completeness marker ignored (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/ReferencedSummaries.cs",
+    "old": "                    complete.Add(assembly);",
+    "new": "                    _ = assembly;"
+  },
+  {
+    "name": "Implementations searched in source only",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "            builder.AddRange(CollectTypes(assembly.GlobalNamespace));",
+    "new": "            _ = assembly;"
+  },
+  {
+    "name": "Return facts not written",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryExport.cs",
+    "old": "        if (returns.Kind is OriginKind.Ef or OriginKind.NotEf or OriginKind.Parameter)",
+    "new": "        if (returns.Kind is OriginKind.Pending)"
+  },
+  {
+    "name": "Argument-dependent queries not written",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryExport.cs",
+    "old": "                    lines.Add(Effect(tag, \"P\" + i.ToString(CultureInfo.InvariantCulture), conditional));",
+    "new": "                    _ = conditional;"
+  },
+  {
+    "name": "Argument-dependent queries written as unconditional (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryExport.cs",
+    "old": "                    lines.Add(Effect(tag, \"P\" + i.ToString(CultureInfo.InvariantCulture), conditional));",
+    "new": "                    lines.Add(Effect(tag, \"E\", conditional));"
+  },
+  {
+    "name": "Navigation reads not written",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryExport.cs",
+    "old": "                lines.Add(Join(\"N\", Number(read.Parameter), read.Path, Flag(read.PerElement)));",
+    "new": "                _ = read;"
+  },
+  {
+    "name": "Saves not written",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryExport.cs",
+    "old": "foreach (var (kind, tag) in new[] { (EffectKind.Query, \"Q\"), (EffectKind.Save, \"S\") })",
+    "new": "foreach (var (kind, tag) in new[] { (EffectKind.Query, \"Q\") })"
+  },
+  {
+    "name": "Auto-includes not exported (precision side)",
+    "file": "src/NPlusOne.Analyzers/NPlusOneSummaryGenerator.cs",
+    "old": "                Append(source, attribute, id, ReferencedSummaries.AutoIncludeMarker);",
+    "new": "                _ = id;"
+  },
+  {
+    "name": "Receiver being a loop element ignored (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "var perImplementation = Model.Symbols.IsDispatched(method) && _lazy.ElementOf(invocation.Instance) is not null;",
+    "new": "var perImplementation = false && _lazy.ElementOf(invocation.Instance) is not null;"
+  },
+  {
+    "name": "One implementation is enough for a set of implementations (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "            if (FindWitness(target, arguments, kind) is null)\n            {\n                return false;\n            }",
+    "new": "            if (FindWitness(target, arguments, kind) is not null)\n            {\n                return true;\n            }"
+  },
+  {
+    "name": "Sets of implementations never reported",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "        return !targets.IsEmpty;\n    }",
+    "new": "        return false && !targets.IsEmpty;\n    }"
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Mediator calls not resolved to handlers",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "var query = session.FindWitness(method, arguments, EffectKind.Query) ?? HandlerWitness(invocation, EffectKind.Query);",
+    "new": "var query = session.FindWitness(method, arguments, EffectKind.Query);"
+  },
+  {
+    "name": "Mediator calls inside helpers not followed",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryBuilder.cs",
+    "old": "                _calls.Add(new CallEdge(handler, ImmutableArray<SourceInfo>.Empty, Operations.ReportLocation(invocation)));\n",
+    "new": ""
+  },
+  {
+    "name": "Publish looks for request handlers",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "var handler = method.Name == \"Send\" ? \"IRequestHandler\" : \"INotificationHandler\";",
+    "new": "var handler = \"IRequestHandler\";"
+  },
+  {
+    "name": "this not traced",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "            IInstanceReferenceOperation when owner is { IsStatic: false } => SourceInfo.FromParameter(ParameterNavigationRead.This),\n",
+    "new": ""
+  },
+  {
+    "name": "Computed properties not checked",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "            CheckInstanceMember(property, property.Instance, getter, property.Syntax.GetLocation());\n",
+    "new": ""
+  },
+  {
+    "name": "Instance methods not checked",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "        CheckInstanceMember(invocation, invocation.Instance, invocation.TargetMethod, Operations.ReportLocation(invocation));\n",
+    "new": ""
+  },
+  {
+    "name": "Reads never marked per element",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryBuilder.cs",
+    "old": "var perElement = traced.Parameter != ParameterNavigationRead.This && _lazy.ElementOf(property.Instance) is not null;",
+    "new": "var perElement = false && _lazy.ElementOf(property.Instance) is not null;"
+  },
+  {
+    "name": "Elements handed to another method not followed",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "CollectNavigationReads(call.Callee, i, elements || argument.IsElement, depth - 1, builder);",
+    "new": "CollectNavigationReads(call.Callee, i, elements, depth - 1, builder);"
+  },
+  {
+    "name": "Any materialized value taken as an element (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "CollectNavigationReads(call.Callee, i, elements || argument.IsElement, depth - 1, builder);",
+    "new": "CollectNavigationReads(call.Callee, i, elements || !argument.IsQuery, depth - 1, builder);"
+  },
+  {
+    "name": "Sequence arguments not checked",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "        CheckSequenceArguments(invocation);\n",
+    "new": ""
+  }
+]

@@ -1,0 +1,8 @@
+[
+  {
+    "name": "A partial method is summarized from its implementation part",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "method = method.PartialImplementationPart ?? method;",
+    "new": "method = method.PartialDefinitionPart ?? method;"
+  }
+]

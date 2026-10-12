@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Mapper calls not checked",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "        CheckMapperCall(context, invocation);\n",
+    "new": ""
+  },
+  {
+    "name": "Ignore() overrides not honoured (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "                overrides[member] = null;\n                return;",
+    "new": "                return;"
+  },
+  {
+    "name": "MapFrom paths not read",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "                overrides[member] = NavigationPaths(sourceLambda);",
+    "new": "                overrides[member] = ImmutableArray<string>.Empty;"
+  },
+  {
+    "name": "Flattened names not followed",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "            if (HasProperty(navigation.Target, rest))",
+    "new": "            if (false && HasProperty(navigation.Target, rest))"
+  },
+  {
+    "name": "Visible CreateMap not used",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "        return _reads.GetOrAdd(key, k => _maps.Value.TryGetValue(k, out var overrides)",
+    "new": "        return _reads.GetOrAdd(key, k => false && _maps.Value.TryGetValue(k, out var overrides)"
+  },
+  {
+    "name": "Mapster not recognised",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "(\"MapsterMapper\", \"Map\") or (\"Mapster\", \"Adapt\") => MapperLibrary.Mapster,",
+    "new": "(\"MapsterMapper\", \"Map\") or (\"Mapster\", \"NotAdapt\") => MapperLibrary.Mapster,"
+  },
+  {
+    "name": "Single entity outside a loop counted (precision side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (!session.Entities.IsEntity(entity) || (sourceElement is null && element is null))",
+    "new": "if (!session.Entities.IsEntity(entity))"
+  }
+]

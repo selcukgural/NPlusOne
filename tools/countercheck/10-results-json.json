@@ -1,0 +1,8 @@
+[
+  {
+    "name": "The data parameter is the value",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "a.Parameter?.Name is \"value\" or \"data\"",
+    "new": "a.Parameter?.Name is \"value\" or \"dataX\""
+  }
+]

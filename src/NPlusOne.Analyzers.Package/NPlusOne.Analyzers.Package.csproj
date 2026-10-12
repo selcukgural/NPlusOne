@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Packs the analyzer and its code fixes as one NuGet package, NPlusOne.Analyzers. Both assemblies go
+    to analyzers/dotnet/cs, where the compiler and the IDE load them; nothing is added to the
+    consuming project's own references, and the package is a development dependency.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageId>NPlusOne.Analyzers</PackageId>
+    <Title>N+1 analyzer for EF Core</Title>
+    <Description>Finds N+1 queries in EF Core code at build time: a query, a lazy load or a SaveChanges that runs once per element, through loops, LINQ lambdas, Task.WhenAll, Parallel, helpers, repositories and recursion. Each warning suggests the rewrite; code fixes add the missing Include and move SaveChanges after the loop.</Description>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <NoPackageAnalysis>true</NoPackageAnalysis>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddAnalyzerAssemblies</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../NPlusOne.Analyzers/NPlusOne.Analyzers.csproj" />
+    <ProjectReference Include="../NPlusOne.Analyzers.CodeFixes/NPlusOne.Analyzers.CodeFixes.csproj" />
+    <None Include="build/NPlusOne.Analyzers.props" Pack="true" PackagePath="build/" />
+  </ItemGroup>
+
+  <Target Name="AddAnalyzerAssemblies">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(OutputPath)NPlusOne.Analyzers.dll" PackagePath="analyzers/dotnet/cs" />
+      <TfmSpecificPackageFile Include="$(OutputPath)NPlusOne.Analyzers.CodeFixes.dll" PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
+</Project>

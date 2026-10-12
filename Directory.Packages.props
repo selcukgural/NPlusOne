@@ -1,0 +1,76 @@
+<Project>
+  <!-- Central package versions. Add a dependency only when it replaces a meaningful amount of code. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!--
+    The analyzer is built against the oldest Roslyn it supports (4.8, shipped with the .NET 8 SDK
+    and Visual Studio 17.8), so it loads in every newer compiler as well.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
+  </ItemGroup>
+
+  <!--
+    The runtime guard is built once per supported EF Core major version, so each target framework
+    restores the EF Core that ships with it and the tests run against each (8, 9 and 10). The published
+    libraries depend on the lowest patch of each that has no known vulnerable dependency, so an application is
+    not forced onto the latest patch; the tests run on the latest.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.31" Condition="'$(NPlusOneLibrary)' != 'true'" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.10" Condition="'$(NPlusOneLibrary)' == 'true'" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Proxies" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.31" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="8.0.17" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="9.0.20" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.20" Condition="'$(NPlusOneLibrary)' != 'true'" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.0" Condition="'$(NPlusOneLibrary)' == 'true'" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.20" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Proxies" Version="9.0.20" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.20" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="9.0.0" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' != 'net8.0' And '$(TargetFramework)' != 'net9.0'">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" Condition="'$(NPlusOneLibrary)' != 'true'" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.0" Condition="'$(NPlusOneLibrary)' == 'true'" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Proxies" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.12" />
+  </ItemGroup>
+
+  <!--
+    The real libraries the analyzer recognises, so the corpus compiles against their actual APIs
+    instead of copies of their shapes. Test-only; the last versions under a permissive license.
+  -->
+  <ItemGroup>
+    <PackageVersion Include="AutoMapper" Version="14.0.0" />
+    <PackageVersion Include="Mapster" Version="7.4.0" />
+    <PackageVersion Include="MediatR" Version="12.5.0" />
+    <PackageVersion Include="Mediator.Abstractions" Version="3.0.2" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageVersion Include="FluentValidation" Version="12.1.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.OData" Version="9.5.0" />
+    <PackageVersion Include="Riok.Mapperly" Version="4.3.1" />
+    <PackageVersion Include="LinqContraband" Version="5.17.0" />
+    <PackageVersion Include="EFCore.QueryGuard" Version="1.0.1" />
+    <PackageVersion Include="DbEye" Version="1.3.0" />
+    <PackageVersion Include="MiniProfiler.EntityFrameworkCore" Version="4.5.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+  </ItemGroup>
+</Project>
