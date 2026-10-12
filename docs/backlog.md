@@ -351,6 +351,9 @@ assigned source is never read half-built by another thread. Counter-checks `tool
 - **A scenario solution under `samples/`.** One small application wiring the libraries together the way a real one would
   (the corpus covers each case on its own); useful for the documentation and as a demo.
 - **More open-source applications** as users name them; each false finding becomes a corpus case.
+- **New majors of the corpus libraries.** The corpus compiles against AutoMapper 14, MediatR 12.5 and Mapster 7.4
+  (Dependabot ignores their majors). Check AutoMapper 15+/16, MediatR 13+/14 (both commercially licensed now) and
+  Mapster 10 for API shapes the analyzer does not follow yet, with corpus cases compiled against them.
 
 ## Not planned: limits of static analysis
 

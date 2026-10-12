@@ -19,6 +19,30 @@ updates:
       # The published libraries depend on the lowest supported EF Core patch on purpose.
       - dependency-name: "Microsoft.EntityFrameworkCore.Relational"
         update-types: ["version-update:semver-patch"]
+      # The corpus is compiled against these libraries, and the comparison scores these tools: a new major is a work
+      # item (corpus cases, new results), not a bump. AutoMapper 15+ and MediatR 13+ are commercially licensed.
+      - dependency-name: "AutoMapper"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "MediatR"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Mapster"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Mediator.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "FluentValidation"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Riok.Mapperly"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "LinqContraband"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "EFCore.QueryGuard"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "DbEye"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "MiniProfiler.*"
+        update-types: ["version-update:semver-major"]
+    # Dependabot regenerates packages.lock.json for one target framework only, so its NuGet pull requests fail the locked
+    # restore in CI: apply the bump locally, run `dotnet restore --force-evaluate`, and commit the lock files with it.
 
   - package-ecosystem: npm
     directory: /website

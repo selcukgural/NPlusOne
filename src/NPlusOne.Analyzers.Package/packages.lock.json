@@ -22,7 +22,7 @@
       "nplusone.analyzers.codefixes": {
         "type": "Project",
         "dependencies": {
-          "NPlusOne.Analyzers.Assembly": "[0.1.0, )"
+          "NPlusOne.Analyzers.Assembly": "[1.0.0, )"
         }
       }
     }
