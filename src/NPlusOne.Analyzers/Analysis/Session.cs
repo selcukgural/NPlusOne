@@ -172,6 +172,23 @@ internal sealed class Session
     public ImmutableArray<IMethodSymbol> TargetsOf(IMethodSymbol method)
         => _targets.GetOrAdd(method.OriginalDefinition, FindTargets);
 
+    /// <summary>
+    /// The source methods a call can run, as <see cref="TargetsOf(IMethodSymbol)"/> when it is dispatched; a call that is
+    /// not (<c>base.GetAsync(id)</c> in an override) runs only the method's own body, never what overrides it.
+    /// </summary>
+    /// <param name="method">The method called.</param>
+    /// <param name="dispatched">Whether the call is dispatched, as <see cref="IInvocationOperation.IsVirtual"/>.</param>
+    private ImmutableArray<IMethodSymbol> TargetsOf(IMethodSymbol method, bool dispatched)
+    {
+        if (dispatched)
+        {
+            return TargetsOf(method);
+        }
+
+        var definition = method.OriginalDefinition;
+        return !definition.IsAbstract && HasSummary(definition) ? ImmutableArray.Create(definition) : ImmutableArray<IMethodSymbol>.Empty;
+    }
+
     /// <summary>The summary of a source method, or an empty one when it has no body here.</summary>
     /// <param name="method">The method (its original definition).</param>
     public MethodSummary Summary(IMethodSymbol method)
@@ -202,10 +219,18 @@ internal sealed class Session
 
     /// <summary>What a call to <paramref name="method"/> returns, combined over every method it can run.</summary>
     /// <param name="method">The method called.</param>
-    public SourceInfo ReturnsOf(IMethodSymbol method)
+    public SourceInfo ReturnsOf(IMethodSymbol method) => ReturnsOf(TargetsOf(method));
+
+    /// <summary>What a call returns, combined over every method it can run (only the callee's own body for a base call).</summary>
+    /// <param name="call">The call.</param>
+    public SourceInfo ReturnsOf(IInvocationOperation call) => ReturnsOf(TargetsOf(call.TargetMethod, call.IsVirtual));
+
+    /// <summary>What running one of the given methods returns, combined over all of them.</summary>
+    /// <param name="targets">The methods a call can run.</param>
+    private SourceInfo ReturnsOf(ImmutableArray<IMethodSymbol> targets)
     {
         var result = SourceInfo.Pending;
-        foreach (var target in TargetsOf(method))
+        foreach (var target in targets)
         {
             result = result.Combine(Summary(target).Returns);
         }
@@ -223,7 +248,17 @@ internal sealed class Session
     /// <param name="arguments">What each argument is, by parameter ordinal.</param>
     /// <param name="kind">Query or save.</param>
     public Witness? FindWitness(IMethodSymbol method, ImmutableArray<SourceInfo> arguments, EffectKind kind)
-        => FindWitness(method, arguments, kind, Settings.MaxCallDepth);
+        => FindWitness(method, arguments, kind, Settings.MaxCallDepth, true);
+
+    /// <summary>
+    /// Proof that a call makes a round trip of the given kind, as <see cref="FindWitness(IMethodSymbol, ImmutableArray{SourceInfo}, EffectKind)"/>;
+    /// a base call is looked for in the callee's own body only.
+    /// </summary>
+    /// <param name="call">The call.</param>
+    /// <param name="arguments">What each argument is, by parameter ordinal.</param>
+    /// <param name="kind">Query or save.</param>
+    public Witness? FindWitness(IInvocationOperation call, ImmutableArray<SourceInfo> arguments, EffectKind kind)
+        => FindWitness(call.TargetMethod, arguments, kind, Settings.MaxCallDepth, call.IsVirtual);
 
     /// <summary>
     /// The lazy navigations a method reads, directly or through the methods it passes the
@@ -233,9 +268,21 @@ internal sealed class Session
     /// <param name="method">The method called.</param>
     /// <param name="ordinal">The parameter ordinal.</param>
     public ImmutableArray<ParameterNavigationRead> NavigationReadsOf(IMethodSymbol method, int ordinal)
+        => NavigationReadsOf(TargetsOf(method), ordinal);
+
+    /// <summary>The lazy navigations a call reads on a parameter, as <see cref="NavigationReadsOf(IMethodSymbol, int)"/>; a base call reads what the callee's own body reads.</summary>
+    /// <param name="call">The call.</param>
+    /// <param name="ordinal">The parameter ordinal.</param>
+    public ImmutableArray<ParameterNavigationRead> NavigationReadsOf(IInvocationOperation call, int ordinal)
+        => NavigationReadsOf(TargetsOf(call.TargetMethod, call.IsVirtual), ordinal);
+
+    /// <summary>The lazy navigations the given methods read on a parameter.</summary>
+    /// <param name="targets">The methods a call can run.</param>
+    /// <param name="ordinal">The parameter ordinal.</param>
+    private ImmutableArray<ParameterNavigationRead> NavigationReadsOf(ImmutableArray<IMethodSymbol> targets, int ordinal)
     {
         var builder = ImmutableArray.CreateBuilder<ParameterNavigationRead>();
-        CollectNavigationReads(method, ordinal, false, Settings.MaxCallDepth, builder);
+        CollectNavigationReads(targets, ordinal, false, Settings.MaxCallDepth, builder);
         return builder.ToImmutable();
     }
 
@@ -654,7 +701,8 @@ internal sealed class Session
     /// <param name="arguments">The argument sources.</param>
     /// <param name="kind">Query or save.</param>
     /// <param name="depth">How many more calls to follow.</param>
-    private Witness? FindWitness(IMethodSymbol method, ImmutableArray<SourceInfo> arguments, EffectKind kind, int depth)
+    /// <param name="dispatched">Whether the call is dispatched; a base call runs only the method's own body.</param>
+    private Witness? FindWitness(IMethodSymbol method, ImmutableArray<SourceInfo> arguments, EffectKind kind, int depth, bool dispatched)
     {
         var definition = method.OriginalDefinition;
         if (Settings.IgnoredMethods.MatchesMethod(definition))
@@ -667,25 +715,25 @@ internal sealed class Session
             return new Witness(EffectKind.Query, definition.Name, ImmutableArray<string>.Empty, QueryShape.Declared(definition.Name), null);
         }
 
-        var key = new WitnessKey(definition, ArgumentShape(arguments), kind, depth);
+        var key = new WitnessKey(definition, ArgumentShape(arguments), kind, depth, dispatched);
         if (_witnesses.TryGetValue(key, out var cached))
         {
             return cached;
         }
 
-        var witness = SearchWitness(definition, arguments, kind, depth);
+        var witness = SearchWitness(TargetsOf(definition, dispatched), arguments, kind, depth);
         _witnesses.TryAdd(key, witness);
         return witness;
     }
 
     /// <summary>Looks through the summaries of every method the call can run.</summary>
-    /// <param name="method">The method called.</param>
+    /// <param name="targets">The methods the call can run.</param>
     /// <param name="arguments">The argument sources.</param>
     /// <param name="kind">Query or save.</param>
     /// <param name="depth">How many more calls to follow.</param>
-    private Witness? SearchWitness(IMethodSymbol method, ImmutableArray<SourceInfo> arguments, EffectKind kind, int depth)
+    private Witness? SearchWitness(ImmutableArray<IMethodSymbol> targets, ImmutableArray<SourceInfo> arguments, EffectKind kind, int depth)
     {
-        foreach (var target in TargetsOf(method))
+        foreach (var target in targets)
         {
             if (SearchSummary(Summary(target), target, arguments, kind, depth) is { } witness)
             {
@@ -731,15 +779,23 @@ internal sealed class Session
         => SearchSummary(new SummaryBuilder(this, body, symbol).Build(), symbol, arguments, kind, Settings.MaxCallDepth);
 
     /// <summary>
-    /// Whether a call to <paramref name="from"/> can come back to <paramref name="to"/> through the calls
-    /// in the summaries, within <paramref name="depth"/> calls: the two methods recurse through each other.
+    /// Whether a call can come back to <paramref name="to"/> through the calls in the summaries, within
+    /// <paramref name="depth"/> calls: the two methods recurse through each other. A base call (<c>base.GetAsync(id)</c>
+    /// in the override of <c>GetAsync</c>) runs only the base body, which never comes back to the override.
     /// </summary>
-    /// <param name="from">The method called.</param>
+    /// <param name="call">The call.</param>
     /// <param name="to">The method to come back to.</param>
     /// <param name="depth">How many calls to follow.</param>
-    public bool Reaches(IMethodSymbol from, IMethodSymbol to, int depth)
+    public bool Reaches(IInvocationOperation call, IMethodSymbol to, int depth)
+        => Reaches(TargetsOf(call.TargetMethod, call.IsVirtual), to, depth);
+
+    /// <summary>Whether running one of the given methods can lead to <paramref name="to"/> within <paramref name="depth"/> calls.</summary>
+    /// <param name="targets">The methods a call can run.</param>
+    /// <param name="to">The method to come back to.</param>
+    /// <param name="depth">How many calls to follow.</param>
+    private bool Reaches(ImmutableArray<IMethodSymbol> targets, IMethodSymbol to, int depth)
     {
-        foreach (var target in TargetsOf(from))
+        foreach (var target in targets)
         {
             if (SymbolEqualityComparer.Default.Equals(target, to.OriginalDefinition))
             {
@@ -753,36 +809,10 @@ internal sealed class Session
 
             foreach (var call in Summary(target).Calls)
             {
-                if (!SymbolEqualityComparer.Default.Equals(call.Callee, target) && Reaches(call.Callee, to, depth - 1))
+                if (!SymbolEqualityComparer.Default.Equals(call.Callee, target) && Reaches(TargetsOf(call.Callee, call.Dispatched), to, depth - 1))
                 {
                     return true;
                 }
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// Whether the body of <paramref name="from"/> itself (not its overrides) leads to <paramref name="to"/>: what a
-    /// non-virtual call runs, such as <c>base.GetAsync(id)</c> in an override, which never comes back to the override.
-    /// </summary>
-    /// <param name="from">The method called without dispatch.</param>
-    /// <param name="to">The method looked for.</param>
-    /// <param name="depth">How many calls deep to look.</param>
-    public bool ReachesFromBody(IMethodSymbol from, IMethodSymbol to, int depth)
-    {
-        var definition = from.OriginalDefinition;
-        if (depth <= 0 || !HasSummary(definition))
-        {
-            return false;
-        }
-
-        foreach (var call in Summary(definition).Calls)
-        {
-            if (!SymbolEqualityComparer.Default.Equals(call.Callee, definition) && Reaches(call.Callee, to, depth - 1))
-            {
-                return true;
             }
         }
 
@@ -825,7 +855,7 @@ internal sealed class Session
             }
 
             var mapped = MapArguments(call.Arguments, arguments);
-            if (FindWitness(call.Callee, mapped, kind, depth - 1) is { } inner)
+            if (FindWitness(call.Callee, mapped, kind, depth - 1, call.Dispatched) is { } inner)
             {
                 return inner.Through(Model.Symbols.Display(target));
             }
@@ -835,14 +865,14 @@ internal sealed class Session
     }
 
     /// <summary>Collects navigation reads on a parameter, following the parameter into other calls.</summary>
-    /// <param name="method">The method called.</param>
-    /// <param name="ordinal">The parameter ordinal in that method.</param>
+    /// <param name="targets">The methods a call can run.</param>
+    /// <param name="ordinal">The parameter ordinal in them.</param>
     /// <param name="elements">Whether the method receives elements of the original parameter, so all its reads are per element.</param>
     /// <param name="depth">How many more calls to follow.</param>
     /// <param name="builder">Where the reads go.</param>
-    private void CollectNavigationReads(IMethodSymbol method, int ordinal, bool elements, int depth, ImmutableArray<ParameterNavigationRead>.Builder builder)
+    private void CollectNavigationReads(ImmutableArray<IMethodSymbol> targets, int ordinal, bool elements, int depth, ImmutableArray<ParameterNavigationRead>.Builder builder)
     {
-        foreach (var target in TargetsOf(method))
+        foreach (var target in targets)
         {
             var summary = Summary(target);
             foreach (var read in summary.NavigationReads)
@@ -869,7 +899,7 @@ internal sealed class Session
                     if (argument.Kind == OriginKind.Parameter && argument.Parameter == ordinal && argument.Path.Length == 0
                         && !SymbolEqualityComparer.Default.Equals(call.Callee, target))
                     {
-                        CollectNavigationReads(call.Callee, i, elements || argument.IsElement, depth - 1, builder);
+                        CollectNavigationReads(TargetsOf(call.Callee, call.Dispatched), i, elements || argument.IsElement, depth - 1, builder);
                     }
                 }
             }
@@ -1132,7 +1162,8 @@ internal sealed class Session
     /// <param name="Arguments">Which arguments are EF queries.</param>
     /// <param name="Kind">Query or save.</param>
     /// <param name="Depth">The remaining depth.</param>
-    private sealed record WitnessKey(IMethodSymbol Method, long Arguments, EffectKind Kind, int Depth)
+    /// <param name="Dispatched">Whether the call is dispatched or runs the method's own body only.</param>
+    private sealed record WitnessKey(IMethodSymbol Method, long Arguments, EffectKind Kind, int Depth, bool Dispatched)
     {
         /// <inheritdoc/>
         public bool Equals(WitnessKey? other)
@@ -1140,10 +1171,11 @@ internal sealed class Session
                && SymbolEqualityComparer.Default.Equals(Method, other.Method)
                && Arguments == other.Arguments
                && Kind == other.Kind
-               && Depth == other.Depth;
+               && Depth == other.Depth
+               && Dispatched == other.Dispatched;
 
         /// <inheritdoc/>
         public override int GetHashCode()
-            => ((SymbolEqualityComparer.Default.GetHashCode(Method) * 31 + Arguments.GetHashCode()) * 31 + (int)Kind) * 31 + Depth;
+            => (((SymbolEqualityComparer.Default.GetHashCode(Method) * 31 + Arguments.GetHashCode()) * 31 + (int)Kind) * 31 + Depth) * 2 + (Dispatched ? 1 : 0);
     }
 }

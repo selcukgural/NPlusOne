@@ -404,6 +404,14 @@ nothing was reported: only `context.Set<Author>().FindAsync(id)` in the EF Core 
   override of `GetAsync` that queries and returns `base.GetAsync(id)` was taken for recursion, because the base call
   was followed to every override. A non-virtual call now runs only the callee's own body (catalogue B29). eShop, both
   Clean Architecture templates and the four private applications report exactly what they did before.
+- ~~**Base calls everywhere else.**~~ (done 2026-10-13, catalogue B30) The B29 fix covered only the recursion check: the
+  search for a query, the lazy reads on arguments and the traced return value still followed `base.Method(...)` to every
+  override. A base call in a loop was reported when only an override queried (also through a helper that makes the base
+  call) or read a navigation, and a query returned by `base.Orders()` took the override's `Include` and missed the lazy
+  load. Summaries now record whether each call is dispatched (`CallEdge.Dispatched`, from `IInvocationOperation.IsVirtual`),
+  and `Session` looks up a call that is not dispatched in the callee's own body only. Method groups, delegates and
+  property getters are still taken as dispatched (`base.Price` as a method group is rare). Corpus: `Reads/CallChains.cs`
+  (`StoredPrices`, `FixedCounts`, `PriceList`) and `Lazy/BaseCalls.cs`. Counter-check `tools/countercheck/31-base-calls.json`.
 
 ## Not planned: limits of static analysis
 

@@ -169,3 +169,100 @@ public class AuditedCategoryReader(AppDb db) : CategoryReader(db)
         return await base.NameLength(id);
     }
 }
+
+// A base call runs the base body only, never an override: only an override queries here, so a loop of base calls
+// makes no round trip, directly or through a helper. A dispatched call in the same loop can run the override.
+public class DefaultPrices
+{
+    public virtual Task<decimal> Price(int id) => Task.FromResult(0m);
+}
+
+public class StoredPrices(AppDb db) : DefaultPrices
+{
+    public override Task<decimal> Price(int id) => db.Orders.Where(o => o.Id == id).SumAsync(o => o.Total);
+
+    public async Task<decimal> BaseInLoop(List<int> ids)
+    {
+        decimal total = 0;
+        foreach (var id in ids)
+        {
+            total += await base.Price(id);
+        }
+
+        return total;
+    }
+
+    public async Task<decimal> BaseThroughHelper(List<int> ids)
+    {
+        decimal total = 0;
+        foreach (var id in ids)
+        {
+            total += await Fallback(id);
+        }
+
+        return total;
+    }
+
+    public async Task<decimal> DispatchedInLoop(List<int> ids)
+    {
+        decimal total = 0;
+        foreach (var id in ids)
+        {
+            total += await Price(id); // expect: NP0001
+        }
+
+        return total;
+    }
+
+    private Task<decimal> Fallback(int id) => base.Price(id);
+}
+
+// The same method called through the base type: the call is dispatched and can run the override that queries.
+public class PriceList(StoredPrices stored)
+{
+    private readonly DefaultPrices _prices = stored;
+
+    public async Task<decimal> Total(List<int> ids)
+    {
+        decimal total = 0;
+        foreach (var id in ids)
+        {
+            total += await _prices.Price(id); // expect: NP0001
+        }
+
+        return total;
+    }
+}
+
+// The other way round: the base queries and the override does not, so a loop of base calls makes one per id.
+public class StoredCounts(AppDb db)
+{
+    public virtual Task<int> Count(int id) => db.Orders.CountAsync(o => o.CustomerId == id);
+}
+
+public class FixedCounts(AppDb db) : StoredCounts(db)
+{
+    public override Task<int> Count(int id) => Task.FromResult(1);
+
+    public async Task<int> BaseInLoop(List<int> ids)
+    {
+        var total = 0;
+        foreach (var id in ids)
+        {
+            total += await base.Count(id); // expect: NP0001
+        }
+
+        return total;
+    }
+
+    public async Task<int> OwnInLoop(List<int> ids)
+    {
+        var total = 0;
+        foreach (var id in ids)
+        {
+            total += await Count(id);
+        }
+
+        return total;
+    }
+}

@@ -25,7 +25,8 @@ internal sealed record Effect(EffectKind Kind, SourceInfo Source, string Name, L
 /// <param name="Callee">The method called.</param>
 /// <param name="Arguments">What each argument is, by the callee's parameter ordinal.</param>
 /// <param name="Location">Where the call is.</param>
-internal sealed record CallEdge(IMethodSymbol Callee, ImmutableArray<SourceInfo> Arguments, Location Location);
+/// <param name="Dispatched">Whether the call can run an override or implementation; a base call runs only the callee's own body.</param>
+internal sealed record CallEdge(IMethodSymbol Callee, ImmutableArray<SourceInfo> Arguments, Location Location, bool Dispatched);
 
 /// <summary>
 /// A lazy navigation a method reads on one of its parameters: on the parameter itself (a mapper reading

@@ -169,7 +169,7 @@ internal sealed class SourceTracer(Session session, IMethodSymbol? owner)
             return SourceInfo.Unknown;
         }
 
-        var returned = session.ReturnsOf(method);
+        var returned = session.ReturnsOf(invocation);
         if (returned.Kind == OriginKind.Parameter)
         {
             var argument = ArgumentFor(invocation, returned.Parameter);

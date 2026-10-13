@@ -1,0 +1,68 @@
+[
+  {
+    "name": "A non-dispatched call runs only the callee's own body",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "        if (dispatched)\n        {\n            return TargetsOf(method);",
+    "new": "        if (dispatched || true)\n        {\n            return TargetsOf(method);"
+  },
+  {
+    "name": "A base call in a loop looks for a query in the base body only",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "=> FindWitness(call.TargetMethod, arguments, kind, Settings.MaxCallDepth, call.IsVirtual);",
+    "new": "=> FindWitness(call.TargetMethod, arguments, kind, Settings.MaxCallDepth, true);"
+  },
+  {
+    "name": "The loop check passes the call, not its method",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "var query = session.FindWitness(invocation, arguments, EffectKind.Query)",
+    "new": "var query = session.FindWitness(method, arguments, EffectKind.Query)"
+  },
+  {
+    "name": "A summary records whether a call is dispatched",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryBuilder.cs",
+    "old": "Operations.ReportLocation(invocation), invocation.IsVirtual));",
+    "new": "Operations.ReportLocation(invocation), true));"
+  },
+  {
+    "name": "A base call inside a helper is followed into the base body only",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "FindWitness(call.Callee, mapped, kind, depth - 1, call.Dispatched)",
+    "new": "FindWitness(call.Callee, mapped, kind, depth - 1, true)"
+  },
+  {
+    "name": "Witnesses are cached apart for dispatched and base calls",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "var key = new WitnessKey(definition, ArgumentShape(arguments), kind, depth, dispatched);",
+    "new": "var key = new WitnessKey(definition, ArgumentShape(arguments), kind, depth, false);"
+  },
+  {
+    "name": "A base call reads the navigations the base body reads",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "=> NavigationReadsOf(TargetsOf(call.TargetMethod, call.IsVirtual), ordinal);",
+    "new": "=> NavigationReadsOf(TargetsOf(call.TargetMethod, true), ordinal);"
+  },
+  {
+    "name": "An element passed to a base call is checked against the base body",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.ImplicitMembers.cs",
+    "old": "var reads = operation is IInvocationOperation call ? session.NavigationReadsOf(call, ordinal) : session.NavigationReadsOf(method, ordinal);",
+    "new": "var reads = session.NavigationReadsOf(method, ordinal);"
+  },
+  {
+    "name": "A base call returns what the base body returns",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "public SourceInfo ReturnsOf(IInvocationOperation call) => ReturnsOf(TargetsOf(call.TargetMethod, call.IsVirtual));",
+    "new": "public SourceInfo ReturnsOf(IInvocationOperation call) => ReturnsOf(TargetsOf(call.TargetMethod, true));"
+  },
+  {
+    "name": "The tracer follows the call, not its method",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "var returned = session.ReturnsOf(invocation);",
+    "new": "var returned = session.ReturnsOf(method);"
+  },
+  {
+    "name": "A base call in an override is no recursion",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "=> Reaches(TargetsOf(call.TargetMethod, call.IsVirtual), to, depth);",
+    "new": "=> Reaches(TargetsOf(call.TargetMethod, true), to, depth);"
+  }
+]

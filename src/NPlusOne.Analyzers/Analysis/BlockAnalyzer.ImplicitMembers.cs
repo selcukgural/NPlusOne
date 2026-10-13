@@ -284,7 +284,8 @@ internal sealed partial class BlockAnalyzer
         }
 
         var source = _tracer.Trace(value);
-        foreach (var read in session.NavigationReadsOf(method, ordinal))
+        var reads = operation is IInvocationOperation call ? session.NavigationReadsOf(call, ordinal) : session.NavigationReadsOf(method, ordinal);
+        foreach (var read in reads)
         {
             if (!read.PerElement && LoadsLazily(source, elementType, read.Path))
             {

@@ -419,8 +419,8 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
 
         var callee = Model.Symbols.Display(method);
         var location = Operations.ReportLocation(invocation);
-        var query = session.FindWitness(method, arguments, EffectKind.Query) ?? HandlerWitness(invocation, EffectKind.Query);
-        var save = session.FindWitness(method, arguments, EffectKind.Save) ?? HandlerWitness(invocation, EffectKind.Save);
+        var query = session.FindWitness(invocation, arguments, EffectKind.Query) ?? HandlerWitness(invocation, EffectKind.Query);
+        var save = session.FindWitness(invocation, arguments, EffectKind.Save) ?? HandlerWitness(invocation, EffectKind.Save);
 
         // Called on each element of a set of implementations (checks, plugins, strategies): each runs
         // once, so only a round trip that every implementation makes repeats per element.
@@ -577,7 +577,7 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
                 continue;
             }
 
-            var reads = session.NavigationReadsOf(invocation.TargetMethod, argument.Parameter.Ordinal);
+            var reads = session.NavigationReadsOf(invocation, argument.Parameter.Ordinal);
             if (reads.IsEmpty || LazyLoadingTurnedOffBefore(invocation))
             {
                 continue;
@@ -857,8 +857,7 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
         // call made by the method that runs the query itself. A non-virtual call (base.Get(id) in the override of
         // Get) runs only the callee's own body, never the overrides that dispatch would reach.
         var depth = session.Settings.MaxCallDepth;
-        if (DirectQuery(self) is { } own
-            && (invocation.IsVirtual ? session.Reaches(callee, self, depth) : session.ReachesFromBody(callee, self, depth)))
+        if (DirectQuery(self) is { } own && session.Reaches(invocation, self, depth))
         {
             context.ReportDiagnostic(Diagnostic.Create(Descriptors.RecursiveQuery, Operations.ReportLocation(invocation), Messages.RecursiveQuery(Model.Symbols.Display(self), own, Model.Symbols.Display(callee))));
         }

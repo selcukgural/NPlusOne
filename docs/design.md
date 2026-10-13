@@ -98,7 +98,8 @@ compilation:
 - calls `SaveChanges`.
 
 A call to an interface or virtual method uses the summaries of every implementation in the
-compilation; one implementation that runs a query is enough. A mediator call (`ISender.Send`,
+compilation; one implementation that runs a query is enough. A call that is not dispatched
+(`base.GetAsync(id)`) runs only the method's own body, never an override. A mediator call (`ISender.Send`,
 `IPublisher.Publish`) runs the handlers registered for its request type: the `Handle` methods of the
 `IRequestHandler`/`INotificationHandler` implementations in the compilation (and the Mediator library's
 `ICommandHandler`/`IQueryHandler`). A call through a delegate local runs

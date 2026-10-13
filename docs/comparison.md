@@ -33,15 +33,15 @@ LC045).
 
 | | Proven N+1 methods found | Proven-constant methods flagged |
 |---|---|---|
-| N+1 (`NPlusOne.Analyzers`) | 255 of 255 | 0 of 458 |
-| LinqContraband 5.17.0 | 55 of 255 (22%) | 17 of 458 |
+| N+1 (`NPlusOne.Analyzers`) | 260 of 260 | 0 of 472 |
+| LinqContraband 5.17.0 | 55 of 260 (21%) | 17 of 472 |
 
 By kind of N+1 (this analyzer's rule ids):
 
 | | N+1 | LinqContraband |
 |---|---|---|
-| Query per element (NP0001) | 107 of 107 | 34 of 107 |
-| Lazy load per element (NP0002) | 83 of 83 | 18 of 83 |
+| Query per element (NP0001) | 110 of 110 | 34 of 110 |
+| Lazy load per element (NP0002) | 85 of 85 | 18 of 85 |
 | Save per element (NP0003) | 11 of 11 | 3 of 11 |
 | Serialized lazy entities (NP0005) | 54 of 54 | 0 of 54 |
 | Convention mappers (NP0007) | 2 of 2 | 0 of 2 |
@@ -64,10 +64,10 @@ profile counts as found (what its UI marks as a duplicate). 36 methods cannot ru
 
 | | Proven N+1 methods found | Proven-constant methods flagged |
 |---|---|---|
-| N+1 runtime guard (`NPlusOne.EntityFrameworkCore`, writes included) | 260 of 260 | 0 of 281 |
-| EFCore.QueryGuard 1.0.1 | 258 of 260 | 6 of 281 |
-| DbEye 1.3.0 | 257 of 260 | 8 of 281 |
-| MiniProfiler 4.5.4 (duplicates) | 18 of 260 | 3 of 281 |
+| N+1 runtime guard (`NPlusOne.EntityFrameworkCore`, writes included) | 265 of 265 | 0 of 295 |
+| EFCore.QueryGuard 1.0.1 | 263 of 265 | 6 of 295 |
+| DbEye 1.3.0 | 262 of 265 | 8 of 295 |
+| MiniProfiler 4.5.4 (duplicates) | 18 of 265 | 3 of 295 |
 
 The tools that group repeated SQL see nearly every case, lazy loads and serialized entities included, since those are
 repeated SQL too. Where they differ:
@@ -85,7 +85,7 @@ repeated SQL too. Where they differ:
 - **MiniProfiler** is a profiler, not an N+1 detector: its duplicate mark needs the same command text with the same
   parameter values, which an N+1 rarely sends.
 
-The guard's 260 of 260 is again by construction (it is tested against this corpus); the useful part is where the other
+The guard's 265 of 265 is again by construction (it is tested against this corpus); the useful part is where the other
 tools fall short and why.
 
 ## Real projects

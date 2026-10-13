@@ -102,6 +102,7 @@ Status:
 | B27 | Query fields and properties set in the constructor | `_big = db.Orders.Where(...)` | NP0001 | covered: `Reads/StoredAndShared.cs` | |
 | B28 | Element parts B20 does not follow | `pairs.Sum(p => p.Order.Customer.Name.Length)` (a part in a lambda), `Zip`, pairs built with `new KeyValuePair(...)`, records built in `Select` (deconstructed or read by property), an index stepped inside a `while` loop | NP0002 | covered: `Lazy/MoreElementParts.cs` | |
 | B29 | An override that queries and calls its base implementation | `public override async Task<BookDto> GetAsync(Guid id) { ...await repo.GetAsync(id)...; return await base.GetAsync(id); }` (ABP application services) | silent: `base.` runs the base body only, no recursion | covered: `Reads/CallChains.cs` (was a false NP0004 in abp-samples, fixed 2026-10-13) | |
+| B30 | A base call per element where only the base or only an override queries | `foreach (var id in ids) total += await base.Price(id);` (also through a helper), `base.Label(order)` reading navigations, `await base.Orders().ToListAsync()` when only the override includes | NP0001 / NP0002 when the base body queries or reads; silent when only an override does (a call through the base type, `_prices.Price(id)`, is dispatched and still reported) | covered: `Reads/CallChains.cs`, `Lazy/BaseCalls.cs` (base calls were followed to every override: false NP0001 and NP0002, and a missed NP0002; fixed 2026-10-13) | |
 
 ## C. ASP.NET Core and API layer
 
@@ -188,14 +189,14 @@ Status:
 
 | Status | Count |
 |---|---|
-| covered | 129 |
+| covered | 130 |
 | works (needs a corpus case) | 0 |
 | gap: missed | 0 |
 | gap: false positive | 0 |
 | runtime guard | 10 |
 | not N+1 | 3 |
 | unverified | 0 (A38's temporal operators stay unrun: SQL Server provider) |
-| **total** | **142** |
+| **total** | **143** |
 
 Some rows count once under their main status even when part of the row is covered elsewhere.
 

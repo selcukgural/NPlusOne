@@ -75,7 +75,7 @@ N+1 hides in more places than a `foreach` with a query in it. The analyzer follo
 and it stays quiet where a loop is meant to make one round trip per iteration: batches, paging, polling, search loops,
 cached lookups, and anything EF Core translates into the same SQL statement.
 
-Every one of the 142 shapes in the [catalogue](https://github.com/selcukgural/NPlusOne/blob/main/docs/catalogue.md) is a
+Every one of the 143 shapes in the [catalogue](https://github.com/selcukgural/NPlusOne/blob/main/docs/catalogue.md) is a
 test that runs on SQLite and counts the SQL: a reported case must send more commands for more rows, a silent one the
 same number, on EF Core 8, 9 and 10.
 
@@ -104,7 +104,7 @@ Options (lazy loading, methods the analyzer cannot see into, call depth) are lis
 
 ## How it compares
 
-Measured on the same proven cases, the analyzer finds 255 of 255 N+1 methods with no false warning; LinqContraband,
+Measured on the same proven cases, the analyzer finds 260 of 260 N+1 methods with no false warning; LinqContraband,
 the static analyzer with the most N+1 rules we found, finds 55. At run time the guard here, EFCore.QueryGuard and DbEye
 all see most cases; the guard alone also sees SQL that differs per element, transactions per element, and counts one
 batched `SaveChanges` once. The corpus was written for this tool, so read the

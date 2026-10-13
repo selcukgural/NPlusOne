@@ -22,6 +22,8 @@
 - A navigation read after loading it explicitly (`Entry(o).Reference(x => x.Customer).Load()`) is no longer reported
   as a lazy load.
 - An override that queries and then calls `base.Method(...)` is no longer reported as recursive (NP0004).
+- A `base.Method(...)` call runs only the base implementation: in a loop it is reported when the base queries or reads
+  a navigation, not when only an override does (NP0001, NP0002), and a query it returns keeps the base's includes.
 
 ## 1.0.0
 

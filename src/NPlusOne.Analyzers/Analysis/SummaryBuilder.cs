@@ -121,10 +121,10 @@ internal sealed class SummaryBuilder(Session session, IOperation body, IMethodSy
 
         if (!Exemptions.IsLoadOnce(invocation))
         {
-            _calls.Add(new CallEdge(invocation.TargetMethod.OriginalDefinition, TraceArguments(invocation), Operations.ReportLocation(invocation)));
+            _calls.Add(new CallEdge(invocation.TargetMethod.OriginalDefinition, TraceArguments(invocation), Operations.ReportLocation(invocation), invocation.IsVirtual));
             foreach (var handler in session.MediatorHandlers(invocation))
             {
-                _calls.Add(new CallEdge(handler, ImmutableArray<SourceInfo>.Empty, Operations.ReportLocation(invocation)));
+                _calls.Add(new CallEdge(handler, ImmutableArray<SourceInfo>.Empty, Operations.ReportLocation(invocation), true));
             }
         }
     }
@@ -148,7 +148,7 @@ internal sealed class SummaryBuilder(Session session, IOperation body, IMethodSy
             if (Operations.AsMethodGroup(argument.Value) is { } group && session.IsIterating(invocation.TargetMethod, argument.Parameter))
             {
                 var element = _tracer.SequenceArgument(invocation) is { } sequence ? _tracer.Trace(sequence).Element() : SourceInfo.Unknown;
-                _calls.Add(new CallEdge(group.OriginalDefinition, ImmutableArray.Create(element), Operations.ReportLocation(argument.Value)));
+                _calls.Add(new CallEdge(group.OriginalDefinition, ImmutableArray.Create(element), Operations.ReportLocation(argument.Value), true));
             }
 
             // A delegate parameter of this method handed on to an iterating method is called per element too.
@@ -219,7 +219,7 @@ internal sealed class SummaryBuilder(Session session, IOperation body, IMethodSy
 
         foreach (var target in methods)
         {
-            _calls.Add(new CallEdge(target.OriginalDefinition, TraceArguments(invocation), Operations.ReportLocation(invocation)));
+            _calls.Add(new CallEdge(target.OriginalDefinition, TraceArguments(invocation), Operations.ReportLocation(invocation), true));
         }
     }
 
@@ -243,7 +243,7 @@ internal sealed class SummaryBuilder(Session session, IOperation body, IMethodSy
     {
         if (BlockAnalyzer.RunGetter(property, session) is { } getter)
         {
-            _calls.Add(new CallEdge(getter.OriginalDefinition, TraceIndexerArguments(property, getter), property.Syntax.GetLocation()));
+            _calls.Add(new CallEdge(getter.OriginalDefinition, TraceIndexerArguments(property, getter), property.Syntax.GetLocation(), true));
         }
 
         if (session.Entities.AsNavigation(property.Property) is not { IsLazy: true }
