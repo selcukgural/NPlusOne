@@ -1,0 +1,32 @@
+[
+  {
+    "name": "A bodyless method returning a query in a task hands out an EF query",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "var queryable = session.Symbols.Unwrap(method.ReturnType);",
+    "new": "var queryable = method.ReturnType;"
+  },
+  {
+    "name": "A type modelBuilder.Entity<T>() maps is an entity",
+    "file": "src/NPlusOne.Analyzers/Model/EntityModel.cs",
+    "old": "var roots = new HashSet<ITypeSymbol>(configured, SymbolEqualityComparer.Default);",
+    "new": "var roots = new HashSet<ITypeSymbol>(configured.Take(0), SymbolEqualityComparer.Default);"
+  },
+  {
+    "name": "A type modelBuilder.Entity(typeof(T)) maps is an entity",
+    "file": "src/NPlusOne.Analyzers/Model/EntityModel.cs",
+    "old": ": invocation.Arguments.Length > 0 && invocation.Arguments[0].Value is ITypeOfOperation typeOf",
+    "new": ": invocation.Arguments.Length > 1 && invocation.Arguments[0].Value is ITypeOfOperation typeOf"
+  },
+  {
+    "name": "Only EF Core's ModelBuilder maps entities (precision)",
+    "file": "src/NPlusOne.Analyzers/Model/EntityModel.cs",
+    "old": "|| !KnownSymbols.InheritsFrom(method.ContainingType, symbols.ModelBuilder))",
+    "new": "|| symbols.ModelBuilder is null)"
+  },
+  {
+    "name": "Entities are not reused when the model configuration maps other types",
+    "file": "src/NPlusOne.Analyzers/Model/DeclarationFacts.cs",
+    "old": "if (known is not null && configured is { } mapped && known.Configured.SequenceEqual(mapped)",
+    "new": "if (known is not null && configured is { } mapped"
+  }
+]

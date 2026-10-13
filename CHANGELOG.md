@@ -9,6 +9,10 @@
   files configure (`AutoInclude`, AutoMapper and Mapster maps) for the next compilation. In a generated project of
   1,000 files (130,000 lines), analysing the edited document went from about 830 ms and 180 MB to 170 ms and 46 MB;
   building it got faster too. The findings are the same.
+- Entities mapped only in the model configuration (`modelBuilder.Entity<T>()`, also in an extension method on
+  `ModelBuilder`, or `Entity(typeof(T))`) without a `DbSet` are entities: their lazy loads are found.
+- A query a repository from a package hands out in a task (`await repository.GetQueryableAsync()`, `GetDbSetAsync()`)
+  is an EF query, so running it per element is reported.
 
 ## 1.0.0
 

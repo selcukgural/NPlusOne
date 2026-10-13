@@ -171,8 +171,10 @@ internal sealed class SourceTracer(Session session, IMethodSymbol? owner)
             return returned;
         }
 
-        // A method without a visible body that returns IQueryable<Entity> is a repository handing out an EF query.
-        if (session.Symbols.IsQueryable(method.ReturnType) && session.Entities.IsEntity(session.Symbols.ElementType(method.ReturnType)))
+        // A method without a visible body that returns IQueryable<Entity>, also in a task (ABP's GetQueryableAsync and
+        // GetDbSetAsync), is a repository handing out an EF query.
+        var queryable = session.Symbols.Unwrap(method.ReturnType);
+        if (session.Symbols.IsQueryable(queryable) && session.Entities.IsEntity(session.Symbols.ElementType(queryable)))
         {
             return SourceInfo.EfQuery;
         }

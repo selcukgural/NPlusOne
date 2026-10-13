@@ -26,8 +26,8 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
     private static readonly object Gate = new();
     private static readonly Dictionary<string, List<DeclarationFacts>> Remembered = new(StringComparer.Ordinal);
 
-    /// <summary>The entities, once found and named; default until then (one array reference, so it is read and written whole).</summary>
-    private ImmutableArray<TypeName> _entities;
+    /// <summary>The entities, once found and named, with the types the model configuration mapped when they were; null until then.</summary>
+    private volatile NamedEntities? _entities;
 
     /// <summary>Whether an entity cannot be named (a type parameter), so the entities are collected for each compilation.</summary>
     private volatile bool _entitiesUnnamed;
@@ -91,23 +91,29 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
         }
     }
 
-    /// <summary>The entity types of a compilation these facts are for: found by name when known, else collected and named.</summary>
+    /// <summary>
+    /// The entity types of a compilation these facts are for: found by name when known, else collected and named. The
+    /// types the model configuration maps (<c>modelBuilder.Entity&lt;T&gt;()</c>) are read from method bodies, which the
+    /// declarations leave out, so the names are reused only for the same mapped types.
+    /// </summary>
     /// <param name="compilation">The compilation.</param>
+    /// <param name="configured">The types the model configuration maps, by name; null when one cannot be named, and then nothing is reused.</param>
     /// <param name="collect">Finds the entities.</param>
-    public ImmutableHashSet<ITypeSymbol> Entities(Compilation compilation, Func<ImmutableHashSet<ITypeSymbol>> collect)
+    public ImmutableHashSet<ITypeSymbol> Entities(Compilation compilation, ImmutableArray<TypeName>? configured, Func<ImmutableHashSet<ITypeSymbol>> collect)
     {
-        var names = _entities;
-        if (!names.IsDefault && TypeName.Resolve(compilation, names) is { } known)
+        var known = _entities;
+        if (known is not null && configured is { } mapped && known.Configured.SequenceEqual(mapped)
+            && TypeName.Resolve(compilation, known.Entities) is { } types)
         {
-            return ImmutableHashSet.CreateRange<ITypeSymbol>(SymbolEqualityComparer.Default, known);
+            return ImmutableHashSet.CreateRange<ITypeSymbol>(SymbolEqualityComparer.Default, types);
         }
 
         var entities = collect();
-        if (!_entitiesUnnamed)
+        if (!_entitiesUnnamed && configured is { } named)
         {
-            if (TypeName.Of(compilation, entities) is { } named)
+            if (TypeName.Of(compilation, entities) is { } names)
             {
-                _entities = named;
+                _entities = new NamedEntities(named, names);
             }
             else
             {
@@ -220,6 +226,11 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
             return _interfaces;
         }
     }
+
+    /// <summary>The entities by name, and the types the model configuration mapped when they were found.</summary>
+    /// <param name="Configured">The types <c>modelBuilder.Entity</c> calls mapped, in the order the files were read.</param>
+    /// <param name="Entities">The entities.</param>
+    private sealed record NamedEntities(ImmutableArray<TypeName> Configured, ImmutableArray<TypeName> Entities);
 
     /// <summary>The candidates of an interface call by name, and for each interface the positions of the candidates implementing it.</summary>
     /// <param name="Types">The candidates, in order.</param>

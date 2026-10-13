@@ -355,7 +355,7 @@ assigned source is never read half-built by another thread. Counter-checks `tool
   file at a time (an added `DbSet`, a moved base list, a changed constant, a changed referenced project, partial and
   nested types); counter-check `tools/countercheck/29-ide-performance.json`: all 13 parts red when undone.
 
-- **ABP samples.** Scan the ABP framework's sample applications with `tools/scan.sh` and triage, like eShop.
+- **ABP samples.** Scanned 2026-10-13, see item 8: the scan found nothing because the analyzer could not see ABP code.
 - **GraphQL resolvers (catalogue C24).** Hot Chocolate type-extension resolvers taking `[Parent]` run once per parent
   without a DataLoader; see what the analyzer misses there and decide whether to follow them before Dapper and ADO.NET.
 - **A scenario solution under `samples/`.** One small application wiring the libraries together the way a real one would
@@ -364,6 +364,30 @@ assigned source is never read half-built by another thread. Counter-checks `tool
 - **New majors of the corpus libraries.** The corpus compiles against AutoMapper 14, MediatR 12.5 and Mapster 7.4
   (Dependabot ignores their majors). Check AutoMapper 15+/16, MediatR 13+/14 (both commercially licensed now) and
   Mapster 10 for API shapes the analyzer does not follow yet, with corpus cases compiled against them.
+
+## 8. ABP Framework (in progress)
+
+`tools/scan.sh` over abpframework/abp-samples (2026-10-13): of 100 solutions with EF Core projects, 82 built and
+reported nothing, 18 did not build (ABP Commercial, Telerik and DevExpress feeds, samples broken on their own, an old
+`protoc` without arm64, the retired Aspire workload). Eight N+1s planted in a copy of BookStore-Mvc-EfCore showed why
+nothing was reported: only `context.Set<Author>().FindAsync(id)` in the EF Core project was found. The gaps:
+
+- ~~**Entities mapped only in the model configuration.**~~ (done 2026-10-13, catalogue A45) `builder.Entity<Book>(...)`
+  in `OnModelCreating` or in a module's `ConfigureBookStore(this ModelBuilder builder)`, without a `DbSet`, did not make
+  `Book` an entity. Now every `ModelBuilder.Entity<T>()` and `Entity(typeof(T))` call maps one; the files are found
+  through the `SyntaxIndex`, bound once per unchanged file, and the entities are reused only for the same mapped types.
+- ~~**A query handed out in a task.**~~ (done 2026-10-13, catalogue D24) a bodyless `Task<IQueryable<Book>>` or
+  `Task<DbSet<Book>>` (ABP's `GetQueryableAsync()` and `GetDbSetAsync()`) was not an EF query; only a plain
+  `IQueryable<Entity>` was.
+- **Projects without EF Core.** The analyzer starts only when the compilation has EF Core's `DbContext`. An ABP
+  application layer (and any layered application whose repositories live behind interfaces in the domain project)
+  references no EF Core, so it was never analysed: not even NP0006 for a repository without a visible body.
+- **ABP's own APIs.** `IRepository`/`IReadOnlyRepository` methods (`GetAsync`, `FindAsync`, `FirstOrDefaultAsync`,
+  `GetListAsync`, `CountAsync`, `DeleteAsync(id)`, ...), `AsyncExecuter`, `WithDetailsAsync`, and `IEntity` as what marks
+  an entity where no `DbContext` is visible. Corpus cases compile against the real ABP packages, and the ground truth runs
+  them through ABP's `EfCoreRepository` on SQLite.
+
+Then scan abp-samples again and triage what it reports.
 
 ## Not planned: limits of static analysis
 

@@ -30,7 +30,7 @@ internal sealed class EntityModel(
     private static readonly string[] FrameworkPrefixes = ["System", "Microsoft", "mscorlib", "netstandard", "Newtonsoft", "xunit", "NUnit", "Castle"];
 
     private readonly KnownSymbols _symbols = symbols;
-    private readonly ImmutableHashSet<ITypeSymbol> _entities = facts.Entities(compilation, () => CollectEntities(compilation, symbols));
+    private readonly ImmutableHashSet<ITypeSymbol> _entities = EntitiesOf(compilation, symbols, facts);
 
     /// <summary>Whether proxies can load navigations: forced by the setting, or the proxies package is referenced.</summary>
     private readonly bool _lazyLoadingAvailable = mode switch
@@ -87,13 +87,94 @@ internal sealed class EntityModel(
     public ImmutableArray<Navigation> NavigationsOf(ITypeSymbol entity)
         => _navigations.GetOrAdd(entity.OriginalDefinition, BuildNavigations);
 
+    /// <summary>The entity types of a compilation, reused from the previous compilation with the same declarations and mapped types.</summary>
+    /// <param name="compilation">The compilation.</param>
+    /// <param name="symbols">Its known symbols.</param>
+    /// <param name="facts">Where the entities are kept for the next compilation.</param>
+    private static ImmutableHashSet<ITypeSymbol> EntitiesOf(Compilation compilation, KnownSymbols symbols, DeclarationFacts facts)
+    {
+        var configured = ConfiguredEntities(compilation, symbols, facts);
+        return facts.Entities(compilation, TypeName.Of(compilation, configured), () => CollectEntities(compilation, symbols, configured));
+    }
+
+    /// <summary>
+    /// The types the model configuration maps with <c>modelBuilder.Entity&lt;T&gt;()</c> or <c>Entity(typeof(T))</c>, in
+    /// <c>OnModelCreating</c> or in an extension method on <c>ModelBuilder</c> (as ABP modules configure theirs): a context
+    /// may have no <c>DbSet</c> for them and query them with <c>Set&lt;T&gt;()</c>. Only files that call <c>Entity</c> get a
+    /// semantic model, and each is bound once for the compilations with the same declarations that contain it unchanged.
+    /// </summary>
+    /// <param name="compilation">The compilation.</param>
+    /// <param name="symbols">Its known symbols.</param>
+    /// <param name="facts">Where each file's answer is kept, by name.</param>
+    private static List<ITypeSymbol> ConfiguredEntities(Compilation compilation, KnownSymbols symbols, DeclarationFacts facts)
+    {
+        var types = new List<ITypeSymbol>();
+        if (symbols.ModelBuilder is null)
+        {
+            return types;
+        }
+
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            if (!SyntaxIndex.CallsTo(tree, "Entity").Any())
+            {
+                continue;
+            }
+
+            var named = facts.ForTree(tree, "Entity", () => TypeName.Of(compilation, EntitiesConfiguredIn(compilation, symbols, tree))?.ToArray());
+            if (named is null || TypeName.Resolve(compilation, ImmutableArray.Create(named)) is not { } resolved)
+            {
+                types.AddRange(EntitiesConfiguredIn(compilation, symbols, tree));
+                continue;
+            }
+
+            types.AddRange(resolved);
+        }
+
+        return types;
+    }
+
+    /// <summary>The types one file's <c>ModelBuilder.Entity</c> calls map; a generic helper's type parameter maps no type.</summary>
+    /// <param name="compilation">The compilation.</param>
+    /// <param name="symbols">Its known symbols.</param>
+    /// <param name="tree">The file.</param>
+    private static List<ITypeSymbol> EntitiesConfiguredIn(Compilation compilation, KnownSymbols symbols, SyntaxTree tree)
+    {
+        var types = new List<ITypeSymbol>();
+        SemanticModel? model = null;
+        foreach (var call in SyntaxIndex.CallsTo(tree, "Entity"))
+        {
+#pragma warning disable RS1030 // Model configuration lives in other files than the code being analysed; this runs once per compilation.
+            model ??= compilation.GetSemanticModel(tree);
+#pragma warning restore RS1030
+            if (model.GetOperation(call) is not IInvocationOperation { TargetMethod: var method } invocation
+                || !KnownSymbols.InheritsFrom(method.ContainingType, symbols.ModelBuilder))
+            {
+                continue;
+            }
+
+            var type = method.TypeArguments.Length == 1
+                ? method.TypeArguments[0]
+                : invocation.Arguments.Length > 0 && invocation.Arguments[0].Value is ITypeOfOperation typeOf
+                    ? typeOf.TypeOperand
+                    : null;
+            if (type is INamedTypeSymbol { TypeKind: TypeKind.Class })
+            {
+                types.Add(type.OriginalDefinition);
+            }
+        }
+
+        return types;
+    }
+
     /// <summary>Finds the entity types of a compilation.</summary>
     /// <param name="compilation">The compilation.</param>
     /// <param name="symbols">Its known symbols.</param>
-    private static ImmutableHashSet<ITypeSymbol> CollectEntities(Compilation compilation, KnownSymbols symbols)
+    /// <param name="configured">The types the model configuration maps.</param>
+    private static ImmutableHashSet<ITypeSymbol> CollectEntities(Compilation compilation, KnownSymbols symbols, List<ITypeSymbol> configured)
     {
-        // Contexts, configurations and derived entities all name a base type or an interface.
-        var roots = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        // Contexts, configurations and derived entities all name a base type or an interface; the model configuration maps the rest.
+        var roots = new HashSet<ITypeSymbol>(configured, SymbolEqualityComparer.Default);
         var candidates = CandidateTypes(compilation).Where(Symbols.MayDeriveOrImplement).ToList();
         foreach (var type in candidates)
         {

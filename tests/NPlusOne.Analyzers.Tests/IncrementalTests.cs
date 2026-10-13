@@ -91,6 +91,21 @@ public class IncrementalTests
     }
 
     [Fact]
+    public async Task An_entity_mapped_in_a_model_creating_body_makes_its_type_an_entity()
+    {
+        // The edit is inside a method body, so the file's declarations stay the same.
+        const string before = "public class ShopDb(DbContextOptions<ShopDb> options) : DbContext(options) { protected override void OnModelCreating(ModelBuilder modelBuilder) { modelBuilder.Entity<Order>(); } }";
+        var after = before.Replace("modelBuilder.Entity<Order>();", "modelBuilder.Entity<Order>(); modelBuilder.Entity<Note>();");
+        var compilation = Compile(("Model.cs", Model), ("Context.cs", Context(before)), ("Notes.cs", NotesService));
+        Assert.Empty(await AnalyzeAsync(compilation));
+
+        var added = Edit(compilation, "Context.cs", Context(after));
+        Assert.Equal(["Notes.cs:10 NP0002"], await AnalyzeAsync(added));
+
+        Assert.Empty(await AnalyzeAsync(Edit(added, "Context.cs", Context(before))));
+    }
+
+    [Fact]
     public async Task An_interface_moved_to_another_class_moves_the_calls_through_it()
     {
         const string before = """

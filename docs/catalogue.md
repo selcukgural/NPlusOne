@@ -66,6 +66,7 @@ Status:
 | A42 | Client-side `GroupBy` (EF Core 2 client evaluation) | `db.Orders.GroupBy(...).Select(g => g.ToList())` | silent | not N+1 (EF Core 3+ throws instead) | |
 | A43 | Cartesian explosion of several collection Includes | `Include(c => c.Orders).Include(c => c.Addresses)` | silent | not N+1 (one large query; `AsSplitQuery` is the fix) | |
 | A44 | Retries, timer polls, draining in pages, concurrency conflict handling | `while (!saved) { try { db.SaveChanges(); saved = true; } catch (DbUpdateConcurrencyException e) { foreach (var entry in e.Entries) ... } }`; a `try` around each element's save stays NP0003 | silent / NP0003 | covered: `Writes/RetriesAndDrains.cs` | |
+| A45 | Entities mapped only in the model configuration, without a `DbSet` | `modelBuilder.Entity<Ledger>()`, also in an extension method on `ModelBuilder` (ABP modules) or `Entity(typeof(Receipt))`; `db.Set<Ledger>()` then `l.Owner.Name` per element | NP0002 (silent for an `Entity<T>()` that is not EF Core's) | covered: `Lazy/ModelBuilderEntities.cs` (was missed, fixed 2026-10-13) | |
 
 ## B. C# and .NET constructs
 
@@ -160,6 +161,7 @@ Status:
 | D21 | Caching wrappers | `cache.GetOrCreateAsync(key, _ => db...)` in a loop | silent | covered: `Reads/WorksCases.cs` (was a false positive, fixed 2026-10-12; a key per element is reported: the cache misses once per element) | |
 | D22 | Logging entities | Serilog `logger.Information("{@Order}", o)` destructures every navigation | NP0002 | runtime guard (the sink's destructuring decides) | |
 | D23 | Background jobs enqueued per element | `BackgroundJob.Enqueue(() => Process(id))` | silent | not N+1 (job storage writes, not EF) | |
+| D24 | A repository from a package hands out its query in a task | `var q = await repository.GetQueryableAsync();` (ABP), `GetDbSetAsync()`, `ValueTask<IQueryable<T>>`; run per element | NP0001 (silent for a query of non-entities) | covered: `Reads/AsyncQuerySources.cs` (was missed, fixed 2026-10-13) | |
 
 ## E. Reflection, dynamic dispatch, generated code
 
@@ -178,14 +180,14 @@ Status:
 
 | Status | Count |
 |---|---|
-| covered | 119 |
+| covered | 121 |
 | works (needs a corpus case) | 0 |
 | gap: missed | 0 |
 | gap: false positive | 0 |
 | runtime guard | 10 |
 | not N+1 | 3 |
 | unverified | 0 (A38's temporal operators stay unrun: SQL Server provider) |
-| **total** | **132** |
+| **total** | **134** |
 
 Some rows count once under their main status even when part of the row is covered elsewhere.
 

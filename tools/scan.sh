@@ -52,6 +52,9 @@ for json in $(find . -name global.json -not -path '*/node_modules/*'); do
     printf '{ "sdk": { "version": "%s", "rollForward": "latestPatch" } }\n' "$sdk" > "$json"
   fi
 done
+# Without a global.json of its own the copy would get the newest SDK installed, a preview one too: one above the copy
+# pins this repository's SDK, and a global.json in the project still wins, being nearer.
+printf '{ "sdk": { "version": "%s", "rollForward": "latestPatch" } }\n' "$sdk" > "$work/global.json"
 
 log="$work/build.log"
 dotnet build "$target" --no-incremental -nologo \

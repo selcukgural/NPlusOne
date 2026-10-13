@@ -32,6 +32,7 @@ internal sealed class KnownSymbols
         NavigationEntry = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry");
         CollectionEntry = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.ChangeTracking.CollectionEntry");
         EntityTypeConfiguration = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.IEntityTypeConfiguration`1");
+        ModelBuilder = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.ModelBuilder");
         LazyLoader = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.Infrastructure.ILazyLoader");
         ProxiesExtensions = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.ProxiesExtensions");
         ListOfT = compilation.GetTypeByMetadataName("System.Collections.Generic.List`1");
@@ -108,6 +109,9 @@ internal sealed class KnownSymbols
 
     /// <summary><c>IEntityTypeConfiguration&lt;T&gt;</c>: its type argument is an entity.</summary>
     public INamedTypeSymbol? EntityTypeConfiguration { get; }
+
+    /// <summary><c>ModelBuilder</c>: the type its <c>Entity&lt;T&gt;()</c> and <c>Entity(typeof(T))</c> map is an entity.</summary>
+    public INamedTypeSymbol? ModelBuilder { get; }
 
     /// <summary><c>ILazyLoader</c>: an entity that takes it loads its navigations lazily without proxies.</summary>
     public INamedTypeSymbol? LazyLoader { get; }

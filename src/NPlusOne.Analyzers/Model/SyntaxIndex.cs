@@ -9,7 +9,7 @@ namespace NPlusOne.Analyzers.Model;
 /// <summary>
 /// What the whole-compilation scans need from one syntax tree, found once and kept with the tree: the nodes they bind
 /// (registrations such as <c>AddNewtonsoftJson</c>, pipeline behaviors and minimal API mappings, mapper configurations,
-/// <c>AutoInclude</c> calls) and a hash of its declarations. An IDE makes a new compilation on every keystroke but keeps
+/// <c>AutoInclude</c> and <c>Entity</c> calls) and a hash of its declarations. An IDE makes a new compilation on every keystroke but keeps
 /// the trees of the files that did not change, so after an edit only the edited file is walked again, and each scan binds
 /// a handful of nodes instead of reading every file.
 /// </summary>
@@ -28,13 +28,13 @@ internal sealed class SyntaxIndex(
 
     /// <summary>The names of the calls the scans bind, besides the <c>Map*</c> endpoint mappings.</summary>
     private static readonly ImmutableHashSet<string> CallNames = ImmutableHashSet.Create(
-        StringComparer.Ordinal, "AddNewtonsoftJson", "AutoInclude", "CreateMap", "NewConfig", "ForType");
+        StringComparer.Ordinal, "AddNewtonsoftJson", "AutoInclude", "CreateMap", "NewConfig", "ForType", "Entity");
 
     /// <summary>The minimal API mappings that make a file's <c>Map*</c> calls worth binding.</summary>
     private static readonly ImmutableHashSet<string> EndpointMappings = ImmutableHashSet.Create(
         StringComparer.Ordinal, "MapGet", "MapPost", "MapPut", "MapDelete", "MapPatch", "MapMethods");
 
-    /// <summary>The calls to <c>AddNewtonsoftJson</c>, <c>AutoInclude</c>, <c>CreateMap</c>, <c>NewConfig</c> and <c>ForType</c>.</summary>
+    /// <summary>The calls to <c>AddNewtonsoftJson</c>, <c>AutoInclude</c>, <c>CreateMap</c>, <c>NewConfig</c>, <c>ForType</c> and <c>Entity</c>.</summary>
     public ImmutableArray<InvocationExpressionSyntax> Calls { get; } = calls;
 
     /// <summary>
