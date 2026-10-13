@@ -29,7 +29,16 @@ internal sealed class SourceTracer(Session session, IMethodSymbol? owner)
     /// <param name="depth">How many calls deep the trace may still go.</param>
     public SourceInfo Trace(IOperation? operation, int depth)
     {
-        return Operations.StripConversions(operation) switch
+        var stripped = Operations.StripConversions(operation);
+
+        // An ABP repository is an entity set, however it was obtained (injected, a base class's Repository, this in a
+        // custom repository). No code fix adds an Include to it, so the query has no root location.
+        if (stripped is not null && session.Symbols.IsAbpRepository(stripped.Type))
+        {
+            return SourceInfo.EfQuery;
+        }
+
+        return stripped switch
         {
             null => SourceInfo.Unknown,
             IAwaitOperation awaited => Trace(awaited.Operation, depth),
@@ -117,6 +126,8 @@ internal sealed class SourceTracer(Session session, IMethodSymbol? owner)
                         source = source.WithInclude(path);
                     }
 
+                    source = call.WithDetails(source);
+
                     source = invocation.TargetMethod.Name switch
                     {
                         "AsNoTracking" or "AsNoTrackingWithIdentityResolution" => source with { Untracked = true },
@@ -132,7 +143,7 @@ internal sealed class SourceTracer(Session session, IMethodSymbol? owner)
                 }
 
             case QueryCallKind.Execute:
-                return Trace(call.Source, depth).Materialized();
+                return call.WithDetails(Trace(call.Source, depth)).Materialized();
             case QueryCallKind.ExecuteAlways:
                 return invocation.TargetMethod.Name is "Find" or "FindAsync"
                     ? SourceInfo.EfQuery.Materialized()

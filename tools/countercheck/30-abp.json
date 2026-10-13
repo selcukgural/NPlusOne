@@ -28,5 +28,119 @@
     "file": "src/NPlusOne.Analyzers/Model/DeclarationFacts.cs",
     "old": "if (known is not null && configured is { } mapped && known.Configured.SequenceEqual(mapped)",
     "new": "if (known is not null && configured is { } mapped"
+  },
+  {
+    "name": "The analyzer starts in a project that sees ABP's repositories but no EF Core",
+    "file": "src/NPlusOne.Analyzers/Model/KnownSymbols.cs",
+    "old": "return dbContext is not null || abpRepository is not null || !settings.QueryMethods.IsEmpty",
+    "new": "return dbContext is not null || !settings.QueryMethods.IsEmpty"
+  },
+  {
+    "name": "A project without EF Core or ABP that declares a repository is analysed",
+    "file": "src/NPlusOne.Analyzers/Model/KnownSymbols.cs",
+    "old": "if (settings.DataAccessTypes.MayMatchAnyType(compilation.Assembly.TypeNames))",
+    "new": "if (settings.DataAccessTypes.MayMatchAnyType(compilation.Assembly.TypeNames) && compilation.Assembly.TypeNames.Count < 0)"
+  },
+  {
+    "name": "A project without EF Core or ABP whose referenced project declares a repository is analysed",
+    "file": "src/NPlusOne.Analyzers/Model/KnownSymbols.cs",
+    "old": "if (!EntityModel.IsFrameworkAssembly(assembly.Name) && settings.DataAccessTypes.MayMatchAnyType(assembly.TypeNames))",
+    "new": "if (!EntityModel.IsFrameworkAssembly(assembly.Name) && settings.DataAccessTypes.MayMatchAnyType(assembly.TypeNames) && assembly.TypeNames.Count < 0)"
+  },
+  {
+    "name": "An ABP repository is an entity set",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "if (stripped is not null && session.Symbols.IsAbpRepository(stripped.Type))",
+    "new": "if (stripped is not null && session.Symbols.AbpRepository is null && session.Symbols.IsAbpRepository(stripped.Type))"
+  },
+  {
+    "name": "AsyncExecuter runs the query it is given",
+    "file": "src/NPlusOne.Analyzers/Analysis/AbpCalls.cs",
+    "old": "return new QueryCall(QueryCallKind.Execute, invocation.Arguments.Length > 0 ? invocation.Arguments[0].Value : null);",
+    "new": "return new QueryCall(QueryCallKind.Execute, source);"
+  },
+  {
+    "name": "repository.FirstOrDefaultAsync(...) and the other repository operators run a query",
+    "file": "src/NPlusOne.Analyzers/Analysis/AbpCalls.cs",
+    "old": "if (Is(type, symbols.AbpRepositoryAsyncExtensions))",
+    "new": "if (Is(type, symbols.AbpRepositoryAsyncExtensions) && symbols.AbpEntity is null)"
+  },
+  {
+    "name": "GetAsync, FindAsync, GetListAsync, EnsureExistsAsync, explicit loading run a query",
+    "file": "src/NPlusOne.Analyzers/Analysis/AbpCalls.cs",
+    "old": "if (Queries.Contains(method.Name))",
+    "new": "if (Queries.Contains(method.Name) && symbols.AbpEntity is null)"
+  },
+  {
+    "name": "DeleteAsync(id) loads the entity first",
+    "file": "src/NPlusOne.Analyzers/Analysis/AbpCalls.cs",
+    "old": ".Name is \"id\" or \"ids\" or \"predicate\")",
+    "new": ".Name is \"ids\" or \"predicate\")"
+  },
+  {
+    "name": "A write with autoSave: true saves at once",
+    "file": "src/NPlusOne.Analyzers/Analysis/AbpCalls.cs",
+    "old": "return SavesAtOnce(invocation) ? new QueryCall(QueryCallKind.Save) : QueryCall.None;",
+    "new": "return SavesAtOnce(invocation) && symbols.AbpEntity is null ? new QueryCall(QueryCallKind.Save) : QueryCall.None;"
+  },
+  {
+    "name": "A method the application declares is followed through its body (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/AbpCalls.cs",
+    "old": "if (!extension && (!symbols.IsAbpRepository(type) || !method.OriginalDefinition.DeclaringSyntaxReferences.IsEmpty))",
+    "new": "if (!extension && !symbols.IsAbpRepository(type))"
+  },
+  {
+    "name": "includeDetails: true loads details the analysis cannot read (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/AbpCalls.cs",
+    "old": "return new QueryCall(QueryCallKind.Execute, source, UnknownDetails: LoadsDetails(invocation));",
+    "new": "return new QueryCall(QueryCallKind.Execute, source, UnknownDetails: LoadsDetails(invocation) && symbols.AbpEntity is null);"
+  },
+  {
+    "name": "WithDetails() loads details the analysis cannot read (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/AbpCalls.cs",
+    "old": "? new QueryCall(QueryCallKind.Compose, source, UnknownDetails: true)",
+    "new": "? new QueryCall(QueryCallKind.Compose, source, UnknownDetails: false)"
+  },
+  {
+    "name": "WithDetails(x => x.Author) includes Author (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/AbpCalls.cs",
+    "old": ": new QueryCall(QueryCallKind.Compose, source, DetailPaths: paths.ToImmutable());",
+    "new": ": new QueryCall(QueryCallKind.Compose, source, DetailPaths: paths.ToImmutable().Clear());"
+  },
+  {
+    "name": "Unknown details count as loaded (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceInfo.cs",
+    "old": "=> Includes.Contains(path) || Includes.Contains(AnyInclude) || (navigation",
+    "new": "=> Includes.Contains(path) || (navigation"
+  },
+  {
+    "name": "ABP's IEntity marks entities where no DbContext is visible",
+    "file": "src/NPlusOne.Analyzers/Model/EntityModel.cs",
+    "old": "if (symbols.AbpEntity is not null && type is { TypeKind: TypeKind.Class, IsAbstract: false } && Implements(type, symbols.AbpEntity))",
+    "new": "if (symbols.AbpEntity is not null && symbols.ModelBuilder is not null && type is { TypeKind: TypeKind.Class, IsAbstract: false } && Implements(type, symbols.AbpEntity))"
+  },
+  {
+    "name": "ABP's own repository methods are never NP0006 guesses (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "|| (session.Symbols.IsAbpRepository(method.ContainingType) && method.OriginalDefinition.DeclaringSyntaxReferences.IsEmpty))",
+    "new": "|| (session.Symbols.AbpRepository is null && session.Symbols.IsAbpRepository(method.ContainingType) && method.OriginalDefinition.DeclaringSyntaxReferences.IsEmpty))"
+  },
+  {
+    "name": "A navigation read after Entry(o).Reference(...).Load() loads nothing (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "\"Load\" or \"LoadAsync\" when invocation.Instance",
+    "new": "\"LoadNever\" when invocation.Instance"
+  },
+  {
+    "name": "A navigation read after EnsurePropertyLoadedAsync loads nothing (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "\"EnsurePropertyLoadedAsync\" or \"EnsureCollectionLoadedAsync\"\n",
+    "new": "\"EnsureNever\"\n"
+  },
+  {
+    "name": "A base call in an override is no recursion (precision)",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "(invocation.IsVirtual ? session.Reaches(callee, self, depth)",
+    "new": "(invocation.IsVirtual || invocation.TargetMethod.IsVirtual ? session.Reaches(callee, self, depth)"
   }
 ]

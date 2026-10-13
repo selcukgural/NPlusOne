@@ -379,15 +379,31 @@ nothing was reported: only `context.Set<Author>().FindAsync(id)` in the EF Core 
 - ~~**A query handed out in a task.**~~ (done 2026-10-13, catalogue D24) a bodyless `Task<IQueryable<Book>>` or
   `Task<DbSet<Book>>` (ABP's `GetQueryableAsync()` and `GetDbSetAsync()`) was not an EF query; only a plain
   `IQueryable<Entity>` was.
-- **Projects without EF Core.** The analyzer starts only when the compilation has EF Core's `DbContext`. An ABP
-  application layer (and any layered application whose repositories live behind interfaces in the domain project)
-  references no EF Core, so it was never analysed: not even NP0006 for a repository without a visible body.
-- **ABP's own APIs.** `IRepository`/`IReadOnlyRepository` methods (`GetAsync`, `FindAsync`, `FirstOrDefaultAsync`,
-  `GetListAsync`, `CountAsync`, `DeleteAsync(id)`, ...), `AsyncExecuter`, `WithDetailsAsync`, and `IEntity` as what marks
-  an entity where no `DbContext` is visible. Corpus cases compile against the real ABP packages, and the ground truth runs
-  them through ABP's `EfCoreRepository` on SQLite.
+- ~~**Projects without EF Core.**~~ (done 2026-10-13, catalogue D29) The analyzer started only when the compilation had
+  EF Core's `DbContext`. An ABP application layer, and any layered application whose repositories live behind
+  interfaces in the domain project, references no EF Core, so it was never analysed: not even the NP0006 the rule page
+  promised for Clean Architecture. Now it also starts with ABP's repositories, with `nplusone.query_methods`, or when
+  the project or a referenced non-framework assembly declares a type matching `nplusone.data_access_types` (read from
+  the assemblies' type names, nothing is bound); a project with no data access still costs nothing. Corpus:
+  `corpus/Layered` (two projects, compiled without EF Core and ABP).
+- ~~**ABP's own APIs.**~~ (done 2026-10-13, catalogue D25 to D30, A46) `AbpCalls` knows the repositories' query methods,
+  the repository operators, explicit loading, `AsyncExecuter`, `WithDetails` and the writes with `autoSave: true`; any
+  repository-typed expression is an entity set, and `IEntity` marks the entities where no `DbContext` is visible.
+  `includeDetails: true` and `WithDetails()` load details the application configures, which the analysis cannot read:
+  every navigation counts as loaded there (`SourceInfo.AnyInclude`). A method the application declares with a body of its
+  own (a custom repository's override) is followed through it. A navigation read after an explicit load of it
+  (`Entry(o).Reference(...).Load()`, ABP's `EnsurePropertyLoadedAsync`) was a false NP0002, for EF Core too; fixed.
+  Corpus: `corpus/Abp` (an application layer compiled without EF Core) and `corpus/AbpEfCore` (a DbContext, a custom
+  `EfCoreRepository`, a module configuring details), compiled against ABP 8.3, 9.3 and 10.7; the ground truth runs them
+  in an ABP application (Autofac, ABP's `EfCoreRepository`, a unit of work per method) on SQLite. Counter-check
+  `tools/countercheck/30-abp.json`.
 
-Then scan abp-samples again and triage what it reports.
+- ~~**Scan abp-samples again.**~~ (done 2026-10-13) The 82 solutions that build report 2: a real N+1 in
+  StudioAiGeneratedProjects/MovieCollectionApp (`GetListAsync` maps each movie with a helper that runs
+  `_genreRepository.FindAsync(movie.GenreId)`), and a false NP0004 in DocumentationSamples/CustomApplicationModules: an
+  override of `GetAsync` that queries and returns `base.GetAsync(id)` was taken for recursion, because the base call
+  was followed to every override. A non-virtual call now runs only the callee's own body (catalogue B29). eShop, both
+  Clean Architecture templates and the four private applications report exactly what they did before.
 
 ## Not planned: limits of static analysis
 

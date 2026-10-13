@@ -55,6 +55,13 @@ internal sealed record SourceInfo(
     /// <summary>A fresh EF query over an entity set, with nothing included.</summary>
     public static readonly SourceInfo EfQuery = new(OriginKind.Ef, -1, true, ImmutableHashSet<string>.Empty, "");
 
+    /// <summary>
+    /// Stands in <see cref="Includes"/> for navigations loaded by a configuration the analysis cannot read (ABP's
+    /// <c>WithDetails()</c> and <c>includeDetails: true</c> load what the application configured): every navigation
+    /// counts as loaded, so no lazy load is reported where one may not happen.
+    /// </summary>
+    public const string AnyInclude = "*";
+
     /// <summary>Whether this is an EF query that has not run yet: enumerating it or calling an executing operator runs SQL.</summary>
     public bool IsEfQuery => Kind == OriginKind.Ef && IsQuery;
 
@@ -96,7 +103,10 @@ internal sealed record SourceInfo(
     /// <param name="path">The navigation's full path from the query's root entity.</param>
     /// <param name="navigation">The navigation.</param>
     public bool Loads(string path, Model.Navigation navigation)
-        => Includes.Contains(path) || (navigation.IsAutoIncluded && !IgnoresAutoIncludes);
+        => Includes.Contains(path) || Includes.Contains(AnyInclude) || (navigation.IsAutoIncluded && !IgnoresAutoIncludes);
+
+    /// <summary>The same source with navigations loaded that the analysis cannot name (<see cref="AnyInclude"/>).</summary>
+    public SourceInfo WithUnknownIncludes() => Kind == OriginKind.Ef ? this with { Includes = Includes.Add(AnyInclude) } : this;
 
     /// <summary>A projection (<c>Select</c>, <c>GroupBy</c>, ...) makes new rows: includes no longer apply.</summary>
     public SourceInfo Projected() => this with { Includes = ImmutableHashSet<string>.Empty, Path = "", Root = null };

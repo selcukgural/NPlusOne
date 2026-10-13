@@ -190,6 +190,12 @@ internal sealed class EntityModel(
                 }
             }
 
+            // An ABP application layer sees no DbContext: its entities are the classes implementing ABP's IEntity.
+            if (symbols.AbpEntity is not null && type is { TypeKind: TypeKind.Class, IsAbstract: false } && Implements(type, symbols.AbpEntity))
+            {
+                roots.Add(type.OriginalDefinition);
+            }
+
             if (symbols.EntityTypeConfiguration is null)
             {
                 continue;
@@ -222,6 +228,22 @@ internal sealed class EntityModel(
         }
 
         return ImmutableHashSet.CreateRange<ITypeSymbol>(SymbolEqualityComparer.Default, entities);
+    }
+
+    /// <summary>Whether a type implements an interface, directly or through a base type.</summary>
+    /// <param name="type">The type.</param>
+    /// <param name="iface">The interface definition.</param>
+    private static bool Implements(INamedTypeSymbol type, INamedTypeSymbol iface)
+    {
+        foreach (var implemented in type.AllInterfaces)
+        {
+            if (SymbolEqualityComparer.Default.Equals(implemented.OriginalDefinition, iface))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Whether a type's base types include an entity.</summary>

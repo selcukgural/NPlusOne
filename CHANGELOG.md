@@ -13,6 +13,15 @@
   `ModelBuilder`, or `Entity(typeof(T))`) without a `DbSet` are entities: their lazy loads are found.
 - A query a repository from a package hands out in a task (`await repository.GetQueryableAsync()`, `GetDbSetAsync()`)
   is an EF query, so running it per element is reported.
+- ABP Framework: its repositories (`GetAsync`, `FindAsync`, `GetListAsync`, `DeleteAsync(id)`, `EnsureExistsAsync`,
+  explicit loading, `repository.FirstOrDefaultAsync(...)` and the other operators), `AsyncExecuter`, `WithDetails`,
+  writes with `autoSave: true` (NP0003), and custom `EfCoreRepository` classes. ABP application layers, which
+  reference no EF Core, are analysed.
+- Projects that reference no EF Core but call repositories (a Clean Architecture application layer) are analysed:
+  NP0006 now appears there, as its rule page always said.
+- A navigation read after loading it explicitly (`Entry(o).Reference(x => x.Customer).Load()`) is no longer reported
+  as a lazy load.
+- An override that queries and then calls `base.Method(...)` is no longer reported as recursive (NP0004).
 
 ## 1.0.0
 

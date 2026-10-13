@@ -51,9 +51,7 @@ public static class TestCompilation
     {
         var parseOptions = ParseOptions;
         var optionsProvider = new DictionaryOptionsProvider(options ?? new Dictionary<string, string>());
-        var references = excludedAssemblies is { Count: > 0 }
-            ? [.. References.Where(r => !excludedAssemblies.Contains(System.IO.Path.GetFileNameWithoutExtension(r.Display!)))]
-            : References;
+        var references = ReferencesWithout(excludedAssemblies);
 
         var all = ImmutableArray.CreateBuilder<Diagnostic>();
         foreach (var project in projects)
@@ -108,9 +106,7 @@ public static class TestCompilation
     public static IReadOnlyList<Emitted> Emit(IReadOnlyList<Project> projects, IReadOnlyCollection<string>? excludedAssemblies = null)
     {
         var parseOptions = ParseOptions;
-        var references = excludedAssemblies is { Count: > 0 }
-            ? [.. References.Where(r => !excludedAssemblies.Contains(System.IO.Path.GetFileNameWithoutExtension(r.Display!)))]
-            : References;
+        var references = ReferencesWithout(excludedAssemblies);
 
         var emitted = new List<Emitted>();
         foreach (var project in projects)
@@ -164,6 +160,21 @@ public static class TestCompilation
         .. Directory.GetFiles(System.IO.Path.Combine(AppContext.BaseDirectory, "generators"), "*.dll")
             .SelectMany(path => new Microsoft.CodeAnalysis.Diagnostics.AnalyzerFileReference(path, GeneratorLoader.Instance).GetGenerators(LanguageNames.CSharp)),
     ]);
+
+    // The references without the excluded assemblies: a name, or a prefix ending in '*' (Volo.Abp.*).
+    private static ImmutableArray<MetadataReference> ReferencesWithout(IReadOnlyCollection<string>? excluded)
+    {
+        if (excluded is not { Count: > 0 })
+        {
+            return References;
+        }
+
+        return [.. References.Where(r =>
+        {
+            var name = System.IO.Path.GetFileNameWithoutExtension(r.Display!);
+            return !excluded.Any(e => e.EndsWith('*') ? name.StartsWith(e[..^1], StringComparison.Ordinal) : name == e);
+        })];
+    }
 
     private static ImmutableArray<MetadataReference> LoadReferences()
     {

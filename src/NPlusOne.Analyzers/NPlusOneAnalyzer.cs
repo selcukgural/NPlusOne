@@ -32,16 +32,17 @@ public sealed class NPlusOneAnalyzer : DiagnosticAnalyzer
         context.RegisterCompilationStartAction(OnCompilationStart);
     }
 
-    /// <summary>Sets up the session and the per-block analysis for a compilation that uses EF Core.</summary>
+    /// <summary>Sets up the session and the per-block analysis for a compilation with data access (EF Core, ABP, repositories).</summary>
     /// <param name="context">The compilation start context.</param>
     private static void OnCompilationStart(CompilationStartAnalysisContext context)
     {
-        if (KnownSymbols.TryCreate(context.Compilation) is not { } symbols)
+        var settings = Settings.Read(context.Options.AnalyzerConfigOptionsProvider, context.Compilation);
+        if (KnownSymbols.TryCreate(context.Compilation, settings) is not { } symbols)
         {
             return;
         }
 
-        var session = new Session(context.Compilation, symbols, Settings.Read(context.Options.AnalyzerConfigOptionsProvider, context.Compilation));
+        var session = new Session(context.Compilation, symbols, settings);
         context.RegisterOperationBlockStartAction(block =>
         {
             var analyzer = new BlockAnalyzer(session, block.OwningSymbol);

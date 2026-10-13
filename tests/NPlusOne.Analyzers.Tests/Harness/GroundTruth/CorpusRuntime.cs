@@ -43,6 +43,8 @@ public sealed class CorpusRuntime
     private readonly bool _proxies;
     private readonly bool _newtonsoftMvc;
     private readonly IRuntimeDetector? _detector;
+    private readonly Type[] _abpModules;
+    private readonly Type[] _abpEntities;
 
     /// <param name="folder">The corpus folder.</param>
     /// <param name="detector">A runtime N+1 detector to attach to the contexts and wrap every run in, or none.</param>
@@ -63,8 +65,12 @@ public sealed class CorpusRuntime
 
         // A folder that switches MVC to Newtonsoft.Json (AddNewtonsoftJson) has its controllers' results written by it.
         _newtonsoftMvc = emitted.SelectMany(e => e.Trees).Any(t => t.GetText().ToString().Contains("AddNewtonsoftJson", StringComparison.Ordinal));
-        _proxies = !(options.TryGetValue("nplusone.lazy_loading", out var lazy) && lazy == "disabled")
-                   && !excluded.Contains("Microsoft.EntityFrameworkCore.Proxies");
+        // An ABP folder runs under ABP; one that is only an application layer has its entities mapped by the harness, and
+        // the lazy loading its settings declare is turned on in that EF Core layer it does not compile against.
+        _abpModules = AbpHarness.Modules(_assemblies);
+        _abpEntities = _abpModules.Length > 0 ? AbpHarness.UnmappedEntities(_assemblies) : [];
+        var lazy = options.TryGetValue("nplusone.lazy_loading", out var setting) ? setting : null;
+        _proxies = lazy != "disabled" && (!excluded.Contains("Microsoft.EntityFrameworkCore.Proxies") || (_abpEntities.Length > 0 && lazy == "enabled"));
         TypeAdapterConfig.GlobalSettings.Scan([.. _assemblies]);
     }
 
@@ -119,8 +125,21 @@ public sealed class CorpusRuntime
             ConfigureServices(collection ?? builder!.Services, log, connections, detection);
             builder?.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles);
             var app = builder?.Build();
-            var provider = app?.Services ?? collection!.BuildServiceProvider();
-            await using var owner = (IAsyncDisposable?)app ?? (ServiceProvider)provider;
+            Volo.Abp.IAbpApplicationWithExternalServiceProvider? abp = null;
+            IServiceProvider provider;
+            if (_abpModules.Length > 0 && collection is not null)
+            {
+                var connection = Open(connections);
+                var settings = new AbpHarnessSettings(b => ConfigureContext(b, connection, log, detection), _abpEntities);
+                (abp, provider) = await AbpHarness.StartAsync(collection, _abpModules, settings);
+            }
+            else
+            {
+                provider = app?.Services ?? collection!.BuildServiceProvider();
+            }
+
+            await using var owner = (IAsyncDisposable?)app ?? (IAsyncDisposable)provider;
+            using var application = abp;
             using (var seeding = provider.CreateScope())
             {
                 foreach (var contextType in ContextTypes())
@@ -128,6 +147,19 @@ public sealed class CorpusRuntime
                     var context = (DbContext)seeding.ServiceProvider.GetRequiredService(contextType);
                     context.Database.EnsureCreated();
                     Seeder.Seed(context, count);
+                }
+
+                if (abp is not null)
+                {
+                    using var seedingWork = AbpHarness.Begin(seeding.ServiceProvider);
+                    foreach (var contextType in AbpContextTypes())
+                    {
+                        var context = await AbpHarness.ContextAsync(seeding.ServiceProvider, contextType);
+                        context.Database.EnsureCreated();
+                        Seeder.Seed(context, count);
+                    }
+
+                    await seedingWork.CompleteAsync();
                 }
             }
 
@@ -138,8 +170,14 @@ public sealed class CorpusRuntime
                 return WithSuspects(await RunEndpointAsync(caseMethod, method, app, scope.ServiceProvider, log), detection);
             }
 
+            // Under ABP the method runs in one unit of work, as an application service call does; its end saves what the
+            // method left unsaved, which counts as the method's.
+            using var work = abp is null ? null : AbpHarness.Begin(scope.ServiceProvider);
             var arguments = new Arguments(count, scope.ServiceProvider, caseMethod.NewEntities);
-            var instance = method.IsStatic ? null : arguments.Create(method.DeclaringType!);
+            var instance = method.IsStatic ? null
+                : abp is not null && AbpHarness.IsAbpService(method.DeclaringType!)
+                    ? scope.ServiceProvider.GetService(method.DeclaringType!)
+                    : arguments.Create(method.DeclaringType!);
             if (!method.IsStatic && instance is null)
             {
                 return new Measurement([], $"cannot create {method.DeclaringType!.Name}");
@@ -168,6 +206,11 @@ public sealed class CorpusRuntime
             else
             {
                 await EnumerateDeferredAsync(result);
+            }
+
+            if (work is not null)
+            {
+                await work.CompleteAsync();
             }
 
             log.Recording = false;
@@ -224,22 +267,15 @@ public sealed class CorpusRuntime
         services.AddLogging();
         foreach (var contextType in ContextTypes())
         {
-            var connection = new SqliteConnection("Data Source=:memory:");
-            connection.Open();
-            connections.Add(connection);
+            var connection = Open(connections);
             services.AddSingleton(new ContextMarker(contextType));
-            AddContext(services, contextType, builder =>
-            {
-                // EF Core's internal services (proxy types, compiled models) are cached per options shape, which is the
-                // same for every folder; each folder's Corpus.Order is a different type, so nothing is shared.
-                builder.UseSqlite(connection).AddInterceptors(log).EnableServiceProviderCaching(false)
-                    .ReplaceService<Microsoft.EntityFrameworkCore.Infrastructure.IModelCustomizer, DecimalsAsDoubles>();
-                detection?.Configure(builder);
-                if (_proxies)
-                {
-                    builder.UseLazyLoadingProxies(o => o.IgnoreNonVirtualNavigations());
-                }
-            });
+            AddContext(services, contextType, builder => ConfigureContext(builder, connection, log, detection));
+        }
+
+        // ABP creates and configures its contexts itself (AbpHarness); entity arguments are loaded from them all the same.
+        foreach (var contextType in _abpModules.Length > 0 ? AbpContextTypes() : [])
+        {
+            services.AddSingleton(new ContextMarker(contextType));
         }
 
         // A corpus method that takes MediatR's configuration registers what the corpus registers (pipeline behaviors).
@@ -269,7 +305,8 @@ public sealed class CorpusRuntime
 
         foreach (var type in _assemblies.SelectMany(a => a.GetTypes()))
         {
-            if (!type.IsClass || type.IsAbstract || type.IsGenericTypeDefinition || typeof(DbContext).IsAssignableFrom(type) || type.IsNested && type.IsNestedPrivate)
+            if (!type.IsClass || type.IsAbstract || type.IsGenericTypeDefinition || typeof(DbContext).IsAssignableFrom(type) || type.IsNested && type.IsNestedPrivate
+                || typeof(Volo.Abp.Modularity.AbpModule).IsAssignableFrom(type))
             {
                 continue;
             }
@@ -291,8 +328,36 @@ public sealed class CorpusRuntime
 
     }
 
+    // The plain contexts, which the harness registers; ABP's are AbpContextTypes.
     private IEnumerable<Type> ContextTypes()
-        => _assemblies.SelectMany(a => a.GetTypes()).Where(t => typeof(DbContext).IsAssignableFrom(t) && !t.IsAbstract);
+        => _assemblies.SelectMany(a => a.GetTypes()).Where(t => typeof(DbContext).IsAssignableFrom(t) && !t.IsAbstract && !AbpHarness.IsAbpContext(t));
+
+    // The folder's ABP contexts, or the harness' one that maps the entities of a folder without its own.
+    private IEnumerable<Type> AbpContextTypes()
+        => _abpEntities.Length > 0
+            ? [typeof(AbpHarnessDbContext)]
+            : _assemblies.SelectMany(a => a.GetTypes()).Where(t => !t.IsAbstract && AbpHarness.IsAbpContext(t));
+
+    private static SqliteConnection Open(List<SqliteConnection> connections)
+    {
+        var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        connections.Add(connection);
+        return connection;
+    }
+
+    private void ConfigureContext(DbContextOptionsBuilder builder, SqliteConnection connection, CommandLog log, IDetectorRun? detection)
+    {
+        // EF Core's internal services (proxy types, compiled models) are cached per options shape, which is the
+        // same for every folder; each folder's Corpus.Order is a different type, so nothing is shared.
+        builder.UseSqlite(connection).AddInterceptors(log).EnableServiceProviderCaching(false)
+            .ReplaceService<Microsoft.EntityFrameworkCore.Infrastructure.IModelCustomizer, DecimalsAsDoubles>();
+        detection?.Configure(builder);
+        if (_proxies)
+        {
+            builder.UseLazyLoadingProxies(o => o.IgnoreNonVirtualNavigations());
+        }
+    }
 
     // AddDbContextFactory<TContext>, with the context itself registered as scoped from the factory.
     private static void AddContext(IServiceCollection services, Type contextType, Action<DbContextOptionsBuilder> configure)

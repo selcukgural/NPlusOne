@@ -33,16 +33,16 @@ LC045).
 
 | | Proven N+1 methods found | Proven-constant methods flagged |
 |---|---|---|
-| N+1 (`NPlusOne.Analyzers`) | 231 of 231 | 0 of 415 |
-| LinqContraband 5.17.0 | 53 of 231 (23%) | 17 of 415 |
+| N+1 (`NPlusOne.Analyzers`) | 255 of 255 | 0 of 458 |
+| LinqContraband 5.17.0 | 55 of 255 (22%) | 17 of 458 |
 
 By kind of N+1 (this analyzer's rule ids):
 
 | | N+1 | LinqContraband |
 |---|---|---|
-| Query per element (NP0001) | 89 of 89 | 32 of 89 |
-| Lazy load per element (NP0002) | 77 of 77 | 18 of 77 |
-| Save per element (NP0003) | 9 of 9 | 3 of 9 |
+| Query per element (NP0001) | 107 of 107 | 34 of 107 |
+| Lazy load per element (NP0002) | 83 of 83 | 18 of 83 |
+| Save per element (NP0003) | 11 of 11 | 3 of 11 |
 | Serialized lazy entities (NP0005) | 54 of 54 | 0 of 54 |
 | Convention mappers (NP0007) | 2 of 2 | 0 of 2 |
 
@@ -60,21 +60,21 @@ default settings, attached the way its documentation says, and scores it the sam
 grows should be reported, one it proves constant not. EFCore.QueryGuard 1.0.1 runs its interceptor in one of its scopes per
 method; DbEye 1.3.0 collects through its interceptor and decides with its own middleware, run at the end as at the end of a
 request; MiniProfiler 4.5.4 profiles each method with its EF Core listener, and a SQL command whose text repeats in one
-profile counts as found (what its UI marks as a duplicate). 31 methods cannot run in the harness and count for none.
+profile counts as found (what its UI marks as a duplicate). 36 methods cannot run in the harness and count for none.
 
 | | Proven N+1 methods found | Proven-constant methods flagged |
 |---|---|---|
-| N+1 runtime guard (`NPlusOne.EntityFrameworkCore`, writes included) | 236 of 236 | 0 of 261 |
-| EFCore.QueryGuard 1.0.1 | 234 of 236 | 4 of 261 |
-| DbEye 1.3.0 | 233 of 236 | 6 of 261 |
-| MiniProfiler 4.5.4 (duplicates) | 17 of 236 | 2 of 261 |
+| N+1 runtime guard (`NPlusOne.EntityFrameworkCore`, writes included) | 260 of 260 | 0 of 281 |
+| EFCore.QueryGuard 1.0.1 | 258 of 260 | 6 of 281 |
+| DbEye 1.3.0 | 257 of 260 | 8 of 281 |
+| MiniProfiler 4.5.4 (duplicates) | 18 of 260 | 3 of 281 |
 
 The tools that group repeated SQL see nearly every case, lazy loads and serialized entities included, since those are
 repeated SQL too. Where they differ:
 
 - **One `SaveChanges` with many rows.** QueryGuard and DbEye count the statements of one `SaveChanges` (which EF Core
-  batches into one round trip, committed together) as a repeated query, so a save after the loop is reported (4 of their
-  false alarms). The guard here had the same error until the corpus run found it.
+  batches into one round trip, committed together) as a repeated query, so a save after the loop is reported, and so is
+  an ABP unit of work that saves what the loop changed at its end (6 of their false alarms). The guard here had the same error until the corpus run found it.
 - **SQL text that differs per element.** A query built at run time with the element's value as a constant
   (`Expression.Constant(id)`) sends different SQL text each time: QueryGuard and DbEye miss it; the guard here normalizes
   literals and parameters before grouping.
@@ -85,7 +85,7 @@ repeated SQL too. Where they differ:
 - **MiniProfiler** is a profiler, not an N+1 detector: its duplicate mark needs the same command text with the same
   parameter values, which an N+1 rarely sends.
 
-The guard's 236 of 236 is again by construction (it is tested against this corpus); the useful part is where the other
+The guard's 260 of 260 is again by construction (it is tested against this corpus); the useful part is where the other
 tools fall short and why.
 
 ## Real projects
@@ -97,4 +97,5 @@ tools fall short and why.
 | dotnet/eShop (`dc7ea49`): Catalog.API, Ordering.API, Webhooks.API, Identity.API, OrderProcessor | 8 | all real: `CatalogItems.Find` per ordered item (2); per pending outbox event a `Single` lookup and a `SaveChanges` (6; the saves are the outbox's own per-event bookkeeping, the lookups avoidable) |
 | ardalis/CleanArchitecture (`e7c79be`): the template, the sample, MinimalClean | 1 | real, in seed data: an `INSERT` per contributor in a loop |
 | jasontaylordev/CleanArchitecture (`bf7665f`): Web | 0 | |
+| abpframework/abp-samples: the 82 of 100 EF Core solutions that build | 1 | real, in StudioAiGeneratedProjects/MovieCollectionApp: `GetListAsync` maps each movie with a helper that runs `_genreRepository.FindAsync(movie.GenreId)`. Before ABP support (item 8) the scan found nothing: ABP application layers were not analysed at all |
 | nopSolutions/nopCommerce | not scanned | uses linq2db, not EF Core |

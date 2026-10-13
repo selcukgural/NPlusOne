@@ -86,6 +86,37 @@ internal sealed record NamePatterns(ImmutableArray<string> Patterns)
         return false;
     }
 
+    /// <summary>
+    /// Whether a type of one of these simple names may match: a pattern without a dot matches the name itself, one with a
+    /// dot (a full name) may match any of them, since the namespace is not known here.
+    /// </summary>
+    /// <param name="names">Simple type names (<c>IAssemblySymbol.TypeNames</c>).</param>
+    public bool MayMatchAnyType(ICollection<string> names)
+    {
+        if (IsEmpty)
+        {
+            return false;
+        }
+
+        foreach (var pattern in Patterns)
+        {
+            if (pattern.IndexOf('.') >= 0)
+            {
+                return true;
+            }
+
+            foreach (var name in names)
+            {
+                if (Wildcard.IsMatch(pattern, name))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Matches one method's own name against the patterns.</summary>
     /// <param name="method">The method.</param>
     private bool MatchesOneMethod(IMethodSymbol method)

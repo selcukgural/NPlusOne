@@ -213,6 +213,11 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
             current = navigation.Instance;
         }
 
+        if (LoadedExplicitlyBefore(property, current, segments[0]))
+        {
+            return;
+        }
+
         var owner = walk is null ? _tracer.Trace(current) : WalkStart((ILocalReferenceOperation)Operations.StripConversions(current)!);
         var relative = string.Join(".", segments);
         if (current?.Type is not { } elementType || !LoadsLazily(owner, elementType, relative))
@@ -849,8 +854,11 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
         }
 
         // Recursion through another method (A calls B, B queries and calls A): reported once, at the
-        // call made by the method that runs the query itself.
-        if (DirectQuery(self) is { } own && session.Reaches(callee, self, session.Settings.MaxCallDepth))
+        // call made by the method that runs the query itself. A non-virtual call (base.Get(id) in the override of
+        // Get) runs only the callee's own body, never the overrides that dispatch would reach.
+        var depth = session.Settings.MaxCallDepth;
+        if (DirectQuery(self) is { } own
+            && (invocation.IsVirtual ? session.Reaches(callee, self, depth) : session.ReachesFromBody(callee, self, depth)))
         {
             context.ReportDiagnostic(Diagnostic.Create(Descriptors.RecursiveQuery, Operations.ReportLocation(invocation), Messages.RecursiveQuery(Model.Symbols.Display(self), own, Model.Symbols.Display(callee))));
         }
@@ -874,7 +882,9 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
     /// <summary>
     /// Whether a call cannot be followed and looks like data access: no body in the compilation,
     /// a type matching <c>nplusone.data_access_types</c>, and a result (a method that returns nothing,
-    /// or a bare <c>Task</c>, is a command, not a lookup).
+    /// or a bare <c>Task</c>, is a command, not a lookup). ABP's own repository methods are known
+    /// (<see cref="AbpCalls"/>): one that is not a round trip, such as <c>InsertAsync</c> without
+    /// <c>autoSave</c>, is not a guess either.
     /// </summary>
     /// <param name="method">The method called.</param>
     private bool IsOpaqueDataAccess(IMethodSymbol method)
@@ -883,7 +893,8 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
             || SymbolEqualityComparer.Default.Equals(method.ReturnType, session.Symbols.Task)
             || method.ContainingType is null
             || Model.Symbols.FullName(method.ContainingType).StartsWith("System.", StringComparison.Ordinal)
-            || Model.Symbols.FullName(method.ContainingType).StartsWith("Microsoft.", StringComparison.Ordinal))
+            || Model.Symbols.FullName(method.ContainingType).StartsWith("Microsoft.", StringComparison.Ordinal)
+            || (session.Symbols.IsAbpRepository(method.ContainingType) && method.OriginalDefinition.DeclaringSyntaxReferences.IsEmpty))
         {
             return false;
         }
@@ -1112,6 +1123,61 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
     /// <param name="source">Where the entity comes from.</param>
     private static bool LoadsLazily(Navigation navigation, SourceInfo source)
         => source.Untracked ? navigation.IsLazyWhenUntracked : navigation.IsLazy;
+
+    /// <summary>
+    /// Whether the navigation was loaded explicitly on the same entity earlier in the method:
+    /// <c>db.Entry(o).Reference(x =&gt; x.Customer).LoadAsync()</c> (or <c>Collection</c>), or ABP's
+    /// <c>repository.EnsurePropertyLoadedAsync(o, x =&gt; x.Customer)</c> (or <c>EnsureCollectionLoadedAsync</c>). Reading it
+    /// afterwards loads nothing; the explicit load is the round trip, and NP0001 reports it. A filtered load
+    /// (<c>Collection(...).Query().Where(...).Load()</c>) does not mark the collection loaded, so it does not count.
+    /// </summary>
+    /// <param name="read">The navigation read.</param>
+    /// <param name="entity">The expression of the entity the navigation is read on.</param>
+    /// <param name="navigation">The name of the navigation read on it.</param>
+    private static bool LoadedExplicitlyBefore(IOperation read, IOperation? entity, string navigation)
+    {
+        if (ReferencedSymbol(entity) is not { } target)
+        {
+            return false;
+        }
+
+        var position = read.Syntax.SpanStart;
+        foreach (var descendant in Operations.Root(read).Descendants())
+        {
+            if (descendant is not IInvocationOperation invocation || invocation.Syntax.SpanStart >= position)
+            {
+                continue;
+            }
+
+            var (loaded, selector) = invocation.TargetMethod.Name switch
+            {
+                "Load" or "LoadAsync" when invocation.Instance is IInvocationOperation { TargetMethod.Name: "Reference" or "Collection", Arguments.Length: 1 } member
+                                           && member.Instance is IInvocationOperation { TargetMethod.Name: "Entry", Arguments.Length: 1 } entry
+                    => (entry.Arguments[0].Value, member.Arguments[0].Value),
+                "EnsurePropertyLoadedAsync" or "EnsureCollectionLoadedAsync"
+                    => (invocation.Arguments.FirstOrDefault(static a => a.Parameter?.Name == "entity")?.Value,
+                        invocation.Arguments.FirstOrDefault(static a => a.Parameter?.Name == "propertyExpression")?.Value),
+                _ => (null, null),
+            };
+            if (loaded is not null && selector is not null
+                && SymbolEqualityComparer.Default.Equals(ReferencedSymbol(loaded), target)
+                && QueryCalls.SelectorPath(selector) == navigation)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>The local or parameter an expression reads, or null.</summary>
+    /// <param name="operation">The expression.</param>
+    private static ISymbol? ReferencedSymbol(IOperation? operation) => Operations.StripConversions(operation) switch
+    {
+        ILocalReferenceOperation local => local.Local,
+        IParameterReferenceOperation parameter => parameter.Parameter,
+        _ => null,
+    };
 
     /// <summary>
     /// Whether the method turns lazy loading off (<c>ChangeTracker.LazyLoadingEnabled = false</c>) before

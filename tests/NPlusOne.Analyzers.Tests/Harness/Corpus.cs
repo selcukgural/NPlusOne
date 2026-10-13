@@ -31,7 +31,7 @@ public static class Corpus
         var names = File.ReadAllLines(list).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
         return [.. names.Select((name, i) => new TestCompilation.Project(
             name,
-            [.. (i == 0 ? Directory.GetFiles(Path.Combine(Root, "Shared"), "*.cs") : [])
+            [.. (i == 0 ? SharedFiles(folder) : [])
                 .Concat(Directory.GetFiles(Path.Combine(Root, folder, name), "*.cs", SearchOption.AllDirectories))
                 .Order(StringComparer.Ordinal)
                 .Select(p => new TestCompilation.Source(p, File.ReadAllText(p)))]))];
@@ -39,10 +39,19 @@ public static class Corpus
 
     /// <summary>The sources of one corpus project: its own files and the shared ones.</summary>
     public static IReadOnlyList<TestCompilation.Source> Sources(string folder)
-        => [.. Directory.GetFiles(Path.Combine(Root, "Shared"), "*.cs")
+        => [.. SharedFiles(folder)
             .Concat(Directory.GetFiles(Path.Combine(Root, folder), "*.cs", SearchOption.AllDirectories))
             .Order(StringComparer.Ordinal)
             .Select(p => new TestCompilation.Source(p, File.ReadAllText(p)))];
+
+    /// <summary>
+    /// The shared files a folder compiles with: none when its <c>.globalconfig</c> sets <c>harness.shared = false</c>
+    /// (a project that sees no EF Core, such as an ABP application layer, cannot compile the shared model).
+    /// </summary>
+    private static string[] SharedFiles(string folder)
+        => Options(folder).TryGetValue("harness.shared", out var shared) && shared == "false"
+            ? []
+            : Directory.GetFiles(Path.Combine(Root, "Shared"), "*.cs");
 
     /// <summary>The folder's <c>.globalconfig</c> as key/value pairs (empty when it has none).</summary>
     public static ImmutableDictionary<string, string> Options(string folder)

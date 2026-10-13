@@ -49,7 +49,9 @@ for json in $(find . -name global.json -not -path '*/node_modules/*'); do
   wanted="$(sed -nE 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' "$json" | head -1)"
   if [ -n "$wanted" ] && [ ! -d "$(dirname "$(command -v dotnet)")/sdk/$wanted" ] && [ ! -d "$HOME/.dotnet/sdk/$wanted" ]; then
     echo "scan: $json asks for SDK $wanted, not installed; building with $sdk" >&2
-    printf '{ "sdk": { "version": "%s", "rollForward": "latestPatch" } }\n' "$sdk" > "$json"
+    # Only the SDK selection changes (its version, no roll forward to a preview); the rest (msbuild-sdks such as
+    # MSTest.Sdk) is still needed.
+    perl -0pi -e "s/(\"version\"\\s*:\\s*\")[^\"]+\"/\${1}$sdk\"/; s/(\"rollForward\"\\s*:\\s*\")[^\"]+\"/\${1}latestPatch\"/; s/(\"allowPrerelease\"\\s*:\\s*)true/\${1}false/" "$json"
   fi
 done
 # Without a global.json of its own the copy would get the newest SDK installed, a preview one too: one above the copy

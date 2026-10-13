@@ -29,7 +29,7 @@ public class AsyncQuerySources(IOrderQuerySource source)
         var count = 0;
         foreach (var id in customerIds)
         {
-            // ground-truth: the interface has no implementation in the corpus; ABP's EfCoreRepository behind it is proven in corpus/Abp
+            // ground-truth: the interface has no implementation in the corpus; ABP's EfCoreRepository behind it is proven in corpus/Abp and corpus/AbpEfCore
             var orders = await source.GetQueryableAsync();
             count += await orders.CountAsync(o => o.CustomerId == id); // expect: NP0001
         }
@@ -42,7 +42,7 @@ public class AsyncQuerySources(IOrderQuerySource source)
         var count = 0;
         foreach (var id in customerIds)
         {
-            // ground-truth: the interface has no implementation in the corpus; ABP's EfCoreRepository behind it is proven in corpus/Abp
+            // ground-truth: the interface has no implementation in the corpus; ABP's EfCoreRepository behind it is proven in corpus/Abp and corpus/AbpEfCore
             var orders = await source.GetQueryableValueAsync();
             count += orders.Count(o => o.CustomerId == id); // expect: NP0001
         }
@@ -56,7 +56,7 @@ public class AsyncQuerySources(IOrderQuerySource source)
         var orders = await source.GetDbSetAsync();
         foreach (var id in customerIds)
         {
-            // ground-truth: the interface has no implementation in the corpus; ABP's EfCoreRepository behind it is proven in corpus/Abp
+            // ground-truth: the interface has no implementation in the corpus; ABP's EfCoreRepository behind it is proven in corpus/Abp and corpus/AbpEfCore
             var first = await orders.FirstOrDefaultAsync(o => o.CustomerId == id); // expect: NP0001
             count += first?.Id ?? 0;
         }

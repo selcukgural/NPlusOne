@@ -3,19 +3,24 @@ using Microsoft.CodeAnalysis;
 namespace NPlusOne.Analyzers.Model;
 
 /// <summary>
-/// The framework types the analysis recognises, resolved once per compilation. EF Core types are
-/// required (without them nothing can run a query); the others are optional and simply never match
-/// when the compilation does not reference them.
+/// The framework types the analysis recognises, resolved once per compilation, when the compilation has data access the
+/// analysis knows of (<see cref="TryCreate"/>); a type the compilation does not reference is null and simply never matches.
 /// </summary>
 internal sealed class KnownSymbols
 {
-    /// <summary>Resolves the symbols from a compilation that references EF Core.</summary>
+    /// <summary>Resolves the symbols from a compilation with data access.</summary>
     /// <param name="compilation">The compilation being analysed.</param>
-    /// <param name="dbContext">EF Core's <c>DbContext</c>, already resolved by <see cref="TryCreate"/>.</param>
-    private KnownSymbols(Compilation compilation, INamedTypeSymbol dbContext)
+    /// <param name="dbContext">EF Core's <c>DbContext</c>, already resolved by <see cref="TryCreate"/>; null in a layer without EF Core.</param>
+    /// <param name="abpRepository">ABP's <c>IReadOnlyBasicRepository&lt;TEntity&gt;</c>, already resolved by <see cref="TryCreate"/>.</param>
+    private KnownSymbols(Compilation compilation, INamedTypeSymbol? dbContext, INamedTypeSymbol? abpRepository)
     {
         DbContext = dbContext;
-        EfCoreMajorVersion = dbContext.ContainingAssembly.Identity.Version.Major;
+        EfCoreMajorVersion = dbContext?.ContainingAssembly.Identity.Version.Major ?? 0;
+        AbpRepository = abpRepository;
+        AbpRepositoryAsyncExtensions = compilation.GetTypeByMetadataName("Volo.Abp.Domain.Repositories.RepositoryAsyncExtensions");
+        AbpRepositoryExtensions = compilation.GetTypeByMetadataName("Volo.Abp.Domain.Repositories.RepositoryExtensions");
+        AbpAsyncQueryableExecuter = compilation.GetTypeByMetadataName("Volo.Abp.Linq.IAsyncQueryableExecuter");
+        AbpEntity = compilation.GetTypeByMetadataName("Volo.Abp.Domain.Entities.IEntity");
         DbSet = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.DbSet`1");
         Queryable = compilation.GetTypeByMetadataName("System.Linq.Queryable");
         Enumerable = compilation.GetTypeByMetadataName("System.Linq.Enumerable");
@@ -53,14 +58,32 @@ internal sealed class KnownSymbols
         Hub = compilation.GetTypeByMetadataName("Microsoft.AspNetCore.SignalR.Hub");
     }
 
-    /// <summary><c>Microsoft.EntityFrameworkCore.DbContext</c>.</summary>
-    public INamedTypeSymbol DbContext { get; }
+    /// <summary><c>Microsoft.EntityFrameworkCore.DbContext</c>; null in a project that does not reference EF Core (an application layer).</summary>
+    public INamedTypeSymbol? DbContext { get; }
 
     /// <summary>
-    /// The major version of the EF Core the compilation references (8 for EF Core 8). Behaviour that changed
-    /// between versions depends on it: from EF Core 8 on, entities of no-tracking queries load lazily too.
+    /// The major version of the EF Core the compilation references (8 for EF Core 8), 0 when it references none. Behaviour
+    /// that changed between versions depends on it: from EF Core 8 on, entities of no-tracking queries load lazily too.
     /// </summary>
     public int EfCoreMajorVersion { get; }
+
+    /// <summary>
+    /// ABP's <c>IReadOnlyBasicRepository&lt;TEntity&gt;</c>, the base of every ABP repository: a repository is an entity set
+    /// whose methods run queries, and an ABP application layer sees no EF Core, only these.
+    /// </summary>
+    public INamedTypeSymbol? AbpRepository { get; }
+
+    /// <summary>ABP's <c>RepositoryAsyncExtensions</c>: <c>repository.FirstOrDefaultAsync(...)</c>, <c>CountAsync</c> and the other operators run the repository's query.</summary>
+    public INamedTypeSymbol? AbpRepositoryAsyncExtensions { get; }
+
+    /// <summary>ABP's <c>RepositoryExtensions</c>: explicit loading, <c>EnsureExistsAsync</c> and <c>HardDeleteAsync</c>.</summary>
+    public INamedTypeSymbol? AbpRepositoryExtensions { get; }
+
+    /// <summary>ABP's <c>IAsyncQueryableExecuter</c> (<c>AsyncExecuter</c>): runs the query it is given, without referencing EF Core.</summary>
+    public INamedTypeSymbol? AbpAsyncQueryableExecuter { get; }
+
+    /// <summary>ABP's <c>IEntity</c>: the types implementing it are entities where no <c>DbContext</c> is visible.</summary>
+    public INamedTypeSymbol? AbpEntity { get; }
 
     /// <summary><c>DbSet&lt;T&gt;</c>.</summary>
     public INamedTypeSymbol? DbSet { get; }
@@ -167,12 +190,68 @@ internal sealed class KnownSymbols
     /// <summary>SignalR's <c>Hub</c>, the base of <c>Hub&lt;T&gt;</c>: its public methods return values to the caller.</summary>
     public INamedTypeSymbol? Hub { get; }
 
-    /// <summary>Resolves the symbols, or returns null when the compilation does not reference EF Core.</summary>
+    /// <summary>
+    /// Resolves the symbols, or returns null when nothing in the compilation can make a round trip the analysis knows of:
+    /// it references neither EF Core nor ABP's repositories, declares no <c>nplusone.query_methods</c>, and neither it nor a
+    /// referenced project has a type named like data access (<c>nplusone.data_access_types</c>). An application layer
+    /// that calls <c>IOrderRepository</c> without referencing EF Core is analysed (NP0006); a project with no data access
+    /// costs nothing.
+    /// </summary>
     /// <param name="compilation">The compilation being analysed.</param>
-    public static KnownSymbols? TryCreate(Compilation compilation)
+    /// <param name="settings">The analyzer's options for it.</param>
+    public static KnownSymbols? TryCreate(Compilation compilation, Settings settings)
     {
         var dbContext = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.DbContext");
-        return dbContext is null ? null : new KnownSymbols(compilation, dbContext);
+        var abpRepository = compilation.GetTypeByMetadataName("Volo.Abp.Domain.Repositories.IReadOnlyBasicRepository`1");
+        return dbContext is not null || abpRepository is not null || !settings.QueryMethods.IsEmpty || NamesDataAccess(compilation, settings)
+            ? new KnownSymbols(compilation, dbContext, abpRepository)
+            : null;
+    }
+
+    /// <summary>Whether the compilation or a referenced non-framework assembly declares a type named like data access.</summary>
+    /// <param name="compilation">The compilation.</param>
+    /// <param name="settings">Its options, with the data access type patterns.</param>
+    private static bool NamesDataAccess(Compilation compilation, Settings settings)
+    {
+        if (settings.DataAccessTypes.MayMatchAnyType(compilation.Assembly.TypeNames))
+        {
+            return true;
+        }
+
+        foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
+        {
+            if (!EntityModel.IsFrameworkAssembly(assembly.Name) && settings.DataAccessTypes.MayMatchAnyType(assembly.TypeNames))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether a type is an ABP repository: it is or implements <c>IReadOnlyBasicRepository&lt;TEntity&gt;</c>.</summary>
+    /// <param name="type">The static type of an expression.</param>
+    public bool IsAbpRepository(ITypeSymbol? type)
+    {
+        if (type is null || AbpRepository is null)
+        {
+            return false;
+        }
+
+        if (SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, AbpRepository))
+        {
+            return true;
+        }
+
+        foreach (var i in type.AllInterfaces)
+        {
+            if (SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, AbpRepository))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Whether <paramref name="type"/> is or derives from <paramref name="baseType"/>.</summary>

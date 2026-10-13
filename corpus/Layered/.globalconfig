@@ -1,0 +1,6 @@
+is_global = true
+# A Clean Architecture application layer: it calls repository interfaces whose implementations live in an
+# infrastructure project it does not reference, and references neither EF Core nor ABP (nor the other test libraries whose
+# type names look like data access, so only its own repository interface starts the analysis).
+harness.shared = false
+harness.exclude_references = Microsoft.EntityFrameworkCore*;Volo.Abp.*;NPlusOne.*;Mapster*;EFCore.QueryGuard;Autofac*

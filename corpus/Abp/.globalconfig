@@ -1,0 +1,9 @@
+is_global = true
+# An ABP application layer: it references ABP's repositories but no EF Core, and does not compile the shared EF model.
+# Lazy loading is turned on in the EF Core layer, which this project cannot see, so the setting says so.
+nplusone.lazy_loading = enabled
+# ABP's repositories are known whatever the data access naming convention says; with this one, a custom repository
+# interface is not a guess (NP0006) either.
+nplusone.data_access_types = *Gateway
+harness.shared = false
+harness.exclude_references = Microsoft.EntityFrameworkCore;Microsoft.EntityFrameworkCore.Abstractions;Microsoft.EntityFrameworkCore.Relational;Microsoft.EntityFrameworkCore.Proxies;Microsoft.EntityFrameworkCore.Sqlite;Volo.Abp.EntityFrameworkCore;NPlusOne.EntityFrameworkCore

@@ -6,7 +6,8 @@ namespace NPlusOne.Analyzers.Analysis;
 
 /// <summary>
 /// Classifies invocations by what they do to a query: start one, compose on one, run one, or
-/// save. This is the only place that knows the EF Core and LINQ method names.
+/// save. This is the only place that knows the EF Core and LINQ method names; <see cref="AbpCalls"/>
+/// knows ABP Framework's.
 /// </summary>
 internal static class QueryCalls
 {
@@ -69,7 +70,7 @@ internal static class QueryCalls
                         : QueryCall.None;
         }
 
-        return ClassifyInstanceMethod(method, symbols, source);
+        return AbpCalls.Classify(invocation, symbols, source) ?? ClassifyInstanceMethod(method, symbols, source);
     }
 
     /// <summary>
@@ -111,13 +112,9 @@ internal static class QueryCalls
         {
             relative = text;
         }
-        else if (Operations.AsLambda(argument) is { } lambda && Operations.LambdaResult(lambda) is { } body)
-        {
-            relative = MemberPath(body, lambda.Symbol.Parameters.Length > 0 ? lambda.Symbol.Parameters[0] : null);
-        }
         else
         {
-            return null;
+            relative = SelectorPath(argument);
         }
 
         if (relative is null || invocation.TargetMethod.Name != "ThenInclude")
@@ -130,6 +127,16 @@ internal static class QueryCalls
             ? parent + "." + relative
             : null;
     }
+
+    /// <summary>
+    /// The member path a selector lambda reads from its parameter: <c>o =&gt; o.Customer.Address</c> gives
+    /// <c>Customer.Address</c>; null when the argument is not such a lambda.
+    /// </summary>
+    /// <param name="argument">The selector argument, conversions included.</param>
+    public static string? SelectorPath(IOperation? argument)
+        => Operations.AsLambda(Operations.StripConversions(argument)) is { } lambda && Operations.LambdaResult(lambda) is { } body
+            ? MemberPath(body, lambda.Symbol.Parameters.Length > 0 ? lambda.Symbol.Parameters[0] : null)
+            : null;
 
     /// <summary>Whether a definition is the given known type.</summary>
     /// <param name="type">A type definition.</param>

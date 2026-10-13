@@ -23,7 +23,7 @@ const features = [
   },
   {
     title: 'Proven on a real database',
-    text: 'Every one of the 132 known N+1 shapes in the catalogue is a test case run on SQLite: a reported case must send more SQL for more rows, a silent one the same amount, on EF Core 8, 9 and 10.',
+    text: 'Every one of the 142 known N+1 shapes in the catalogue is a test case run on SQLite: a reported case must send more SQL for more rows, a silent one the same amount, on EF Core 8, 9 and 10.',
   },
 ];
 

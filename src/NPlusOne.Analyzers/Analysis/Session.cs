@@ -763,6 +763,32 @@ internal sealed class Session
         return false;
     }
 
+    /// <summary>
+    /// Whether the body of <paramref name="from"/> itself (not its overrides) leads to <paramref name="to"/>: what a
+    /// non-virtual call runs, such as <c>base.GetAsync(id)</c> in an override, which never comes back to the override.
+    /// </summary>
+    /// <param name="from">The method called without dispatch.</param>
+    /// <param name="to">The method looked for.</param>
+    /// <param name="depth">How many calls deep to look.</param>
+    public bool ReachesFromBody(IMethodSymbol from, IMethodSymbol to, int depth)
+    {
+        var definition = from.OriginalDefinition;
+        if (depth <= 0 || !HasSummary(definition))
+        {
+            return false;
+        }
+
+        foreach (var call in Summary(definition).Calls)
+        {
+            if (!SymbolEqualityComparer.Default.Equals(call.Callee, definition) && Reaches(call.Callee, to, depth - 1))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Looks for a round trip of the given kind in one summary and, below the depth limit, in its calls.</summary>
     /// <param name="summary">The summary.</param>
     /// <param name="target">The method (or lambda) it summarises.</param>

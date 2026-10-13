@@ -153,3 +153,19 @@ public class DbLoader : BaseLoader
     public DbLoader(AppDb db) => _db = db;
     public override Task Load(int id) => _db.Orders.Where(o => o.Id == id).LoadAsync();
 }
+
+// An override that queries and then calls the base implementation (ABP application services override CrudAppService's
+// GetAsync this way): base.NameLength runs the base body once, it never comes back to the override, so it is no recursion.
+public class CategoryReader(AppDb db)
+{
+    public virtual async Task<int> NameLength(int id) => (await db.Categories.FirstAsync(c => c.Id == id)).Name.Length;
+}
+
+public class AuditedCategoryReader(AppDb db) : CategoryReader(db)
+{
+    public override async Task<int> NameLength(int id)
+    {
+        await db.Categories.CountAsync(c => c.Id == id);
+        return await base.NameLength(id);
+    }
+}

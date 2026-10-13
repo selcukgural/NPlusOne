@@ -19,6 +19,10 @@ guard in tests and requests. MIT licensed, free for the community.
   commands for more rows, an unmarked one the same number; a marked method that cannot run, or one the row
   count does not drive, says why in a `// ground-truth: reason` comment. `NPLUSONE_SQL=1` prints the SQL. A new
   corpus case is proven here too, on every supported EF Core version.
+- `corpus/Abp` (an application layer compiled without EF Core) and `corpus/AbpEfCore` compile against ABP Framework
+  (8.3, 9.3, 10.7, one per target framework) and run under ABP in the ground truth (`Harness/GroundTruth/AbpHarness.cs`:
+  Autofac, ABP's `EfCoreRepository`, a unit of work per method). `corpus/Layered` is a Clean Architecture application
+  layer without EF Core (NP0006). Folder options `harness.shared = false` and prefix exclusions (`Volo.Abp.*`) make them.
 - `src/NPlusOne.EntityFrameworkCore` and `src/NPlusOne.AspNetCore` (net8.0 + net9.0 + net10.0, EF Core 8, 9
   and 10): the runtime guard. Tests run on all three; the .NET 8, 9 and 10 runtimes must be installed.
 - `docs/backlog.md` is the work list, taken in order. Each item starts with failing corpus cases
@@ -27,7 +31,7 @@ guard in tests and requests. MIT licensed, free for the community.
   part red. Then strike the heading through with the date and a line on what was done, in the same change.
 - `tools/scan.sh /path/to/repo [sln]` runs the analyzer over another solution without changing it (copies it,
   injects the analyzer); use it to triage real projects. Scanned so far: four private applications (12 real N+1),
-  eShop (8), ardalis/CleanArchitecture (1), jasontaylordev/CleanArchitecture (0), all real after the fixes; findings
+  eShop (8), ardalis/CleanArchitecture (1), jasontaylordev/CleanArchitecture (0), abp-samples (1), all real after the fixes; findings
   are recorded in docs/backlog.md and docs/comparison.md.
 - `ComparisonTests` (`NPLUSONE_COMPARE=1`) scores other tools on the corpus next to this one: LinqContraband (static),
   and EFCore.QueryGuard, DbEye and MiniProfiler (runtime, through `IRuntimeDetector` in the ground-truth harness).

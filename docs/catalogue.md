@@ -67,6 +67,7 @@ Status:
 | A43 | Cartesian explosion of several collection Includes | `Include(c => c.Orders).Include(c => c.Addresses)` | silent | not N+1 (one large query; `AsSplitQuery` is the fix) | |
 | A44 | Retries, timer polls, draining in pages, concurrency conflict handling | `while (!saved) { try { db.SaveChanges(); saved = true; } catch (DbUpdateConcurrencyException e) { foreach (var entry in e.Entries) ... } }`; a `try` around each element's save stays NP0003 | silent / NP0003 | covered: `Writes/RetriesAndDrains.cs` | |
 | A45 | Entities mapped only in the model configuration, without a `DbSet` | `modelBuilder.Entity<Ledger>()`, also in an extension method on `ModelBuilder` (ABP modules) or `Entity(typeof(Receipt))`; `db.Set<Ledger>()` then `l.Owner.Name` per element | NP0002 (silent for an `Entity<T>()` that is not EF Core's) | covered: `Lazy/ModelBuilderEntities.cs` (was missed, fixed 2026-10-13) | |
+| A46 | A navigation read after loading it explicitly | `await db.Entry(o).Reference(x => x.Customer).LoadAsync(); o.Customer.Name` (ABP: `EnsurePropertyLoadedAsync`); after a filtered `Collection(...).Query().Where(...).LoadAsync()` the collection is not loaded | NP0001 on the load, the read silent; NP0002 after a filtered load | covered: `Lazy/WorksLazy.cs`, `Abp/BookServices.cs` (was a false positive, fixed 2026-10-13) | |
 
 ## B. C# and .NET constructs
 
@@ -100,6 +101,7 @@ Status:
 | B26 | Elements passed to helpers, computed members | `PrintCustomers(orders)`, `invoices.Sum(i => i.Total)` | NP0002 | covered: `Lazy/ComputedAndPassed.cs` | |
 | B27 | Query fields and properties set in the constructor | `_big = db.Orders.Where(...)` | NP0001 | covered: `Reads/StoredAndShared.cs` | |
 | B28 | Element parts B20 does not follow | `pairs.Sum(p => p.Order.Customer.Name.Length)` (a part in a lambda), `Zip`, pairs built with `new KeyValuePair(...)`, records built in `Select` (deconstructed or read by property), an index stepped inside a `while` loop | NP0002 | covered: `Lazy/MoreElementParts.cs` | |
+| B29 | An override that queries and calls its base implementation | `public override async Task<BookDto> GetAsync(Guid id) { ...await repo.GetAsync(id)...; return await base.GetAsync(id); }` (ABP application services) | silent: `base.` runs the base body only, no recursion | covered: `Reads/CallChains.cs` (was a false NP0004 in abp-samples, fixed 2026-10-13) | |
 
 ## C. ASP.NET Core and API layer
 
@@ -162,6 +164,12 @@ Status:
 | D22 | Logging entities | Serilog `logger.Information("{@Order}", o)` destructures every navigation | NP0002 | runtime guard (the sink's destructuring decides) | |
 | D23 | Background jobs enqueued per element | `BackgroundJob.Enqueue(() => Process(id))` | silent | not N+1 (job storage writes, not EF) | |
 | D24 | A repository from a package hands out its query in a task | `var q = await repository.GetQueryableAsync();` (ABP), `GetDbSetAsync()`, `ValueTask<IQueryable<T>>`; run per element | NP0001 (silent for a query of non-entities) | covered: `Reads/AsyncQuerySources.cs` (was missed, fixed 2026-10-13) | |
+| D25 | ABP repository methods per element | `await authors.GetAsync(id)`, `FindAsync`, `GetListAsync(b => ...)`, `DeleteAsync(id)`, `EnsureExistsAsync(id)`, `EnsurePropertyLoadedAsync(b, x => x.Author)`, `repository.FirstOrDefaultAsync(...)`/`CountAsync(...)` | NP0001 | covered: `Abp/BookServices.cs` (was missed, fixed 2026-10-13) | |
+| D26 | ABP `AsyncExecuter` on a repository's query | `await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(...))` (an application service's, or an injected `IAsyncQueryableExecuter`) | NP0001 (silent over an in-memory `AsQueryable()`) | covered: `Abp/BookServices.cs` (was missed, fixed 2026-10-13) | |
+| D27 | ABP writes per element | `await books.InsertAsync(book, autoSave: true)`, `UpdateAsync(..., autoSave: true)` | NP0003 (silent without `autoSave`: the unit of work saves once) | covered: `Abp/BookServices.cs`, `AbpEfCore/Library.cs` (was missed, fixed 2026-10-13) | |
+| D28 | ABP details and lazy loading | `GetListAsync()` then `b.Author` per element; `includeDetails: true`, `WithDetails()` (details the application configures), `WithDetails(b => b.Author)` | NP0002 / silent / silent | covered: `Abp/BookServices.cs`, `AbpEfCore/Library.cs` (the configured details are not read: navigations count as loaded) | |
+| D29 | ABP application layer, which references no EF Core | entities are `IEntity` classes, repositories come injected or as `CrudAppService.Repository`; a custom repository interface implemented in the EF Core layer | NP0001 / NP0006 for the custom interface | covered: `Abp/` (compiled without EF Core; was not analysed at all, fixed 2026-10-13) | |
+| D30 | ABP custom repositories (`EfCoreRepository<,,>`) | `(await GetDbSetAsync()).CountAsync(...)`, the base `GetAsync(id)`, `(await GetDbContextAsync()).Set<T>().FindAsync(id)` per element; an override with a body of its own is followed | NP0001 / silent (a cached override) | covered: `AbpEfCore/Library.cs` (was missed, fixed 2026-10-13) | |
 
 ## E. Reflection, dynamic dispatch, generated code
 
@@ -180,14 +188,14 @@ Status:
 
 | Status | Count |
 |---|---|
-| covered | 121 |
+| covered | 129 |
 | works (needs a corpus case) | 0 |
 | gap: missed | 0 |
 | gap: false positive | 0 |
 | runtime guard | 10 |
 | not N+1 | 3 |
 | unverified | 0 (A38's temporal operators stay unrun: SQL Server provider) |
-| **total** | **134** |
+| **total** | **142** |
 
 Some rows count once under their main status even when part of the row is covered elsewhere.
 

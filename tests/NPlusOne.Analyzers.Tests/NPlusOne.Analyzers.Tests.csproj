@@ -25,6 +25,10 @@
     <PackageReference Include="Microsoft.AspNetCore.OData" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" />
     <PackageReference Include="Riok.Mapperly" GeneratePathProperty="true" />
+    <PackageReference Include="Volo.Abp.Ddd.Application" />
+    <PackageReference Include="Volo.Abp.EntityFrameworkCore" />
+    <PackageReference Include="Volo.Abp.Autofac" />
+    <PackageReference Include="System.Linq.Dynamic.Core" Condition="'$(TargetFramework)' == 'net8.0'" />
     <ProjectReference Include="../../src/NPlusOne.Analyzers/NPlusOne.Analyzers.csproj" />
     <ProjectReference Include="../../src/NPlusOne.Analyzers.CodeFixes/NPlusOne.Analyzers.CodeFixes.csproj" />
     <ProjectReference Include="../../src/NPlusOne.EntityFrameworkCore/NPlusOne.EntityFrameworkCore.csproj" />

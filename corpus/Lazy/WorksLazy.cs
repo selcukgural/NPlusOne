@@ -128,4 +128,30 @@ public class WorksLazy(AppDb db, BlogDb blog)
 
         return total;
     }
+
+    // The explicit load is the round trip; reading the navigation after it loads nothing more.
+    public async Task<int> ReadAfterExplicitLoad()
+    {
+        var total = 0;
+        foreach (var order in await db.Orders.ToListAsync())
+        {
+            await db.Entry(order).Reference(o => o.Customer).LoadAsync(); // expect: NP0001
+            total += order.Customer.Name.Length;
+        }
+
+        return total;
+    }
+
+    // A filtered load leaves the collection not loaded: reading it loads it all, once per order.
+    public async Task<int> ReadAfterFilteredLoad()
+    {
+        var total = 0;
+        foreach (var order in await db.Orders.ToListAsync())
+        {
+            await db.Entry(order).Collection(o => o.Lines).Query().Where(l => l.Price > 0).LoadAsync(); // expect: NP0001
+            total += order.Lines.Count; // expect: NP0002
+        }
+
+        return total;
+    }
 }
