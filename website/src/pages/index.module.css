@@ -18,6 +18,42 @@
 
 .buttons {
   display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
   align-items: center;
   justify-content: center;
+}
+
+/* The second hero button takes the hero's text colour, which contrasts with the banner in both themes. */
+.heroOutline,
+.heroOutline:hover {
+  --ifm-button-border-color: var(--ifm-hero-text-color);
+  color: var(--ifm-hero-text-color);
+}
+
+.heroOutline:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Package cards: equal height in a row, the install command and links at the bottom. */
+.package {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.package :global(.card__body) {
+  flex-grow: 1;
+}
+
+/* The install command wraps inside the card instead of scrolling out of sight. */
+.package pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.packageName {
+  margin: 0.5rem 0 0;
+  font-size: 1.1rem;
+  word-break: break-word;
 }

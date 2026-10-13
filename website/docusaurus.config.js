@@ -5,6 +5,8 @@
 import {themes as prismThemes} from 'prism-react-renderer';
 
 const repository = 'https://github.com/selcukgural/NPlusOne';
+// The three packages and nothing else (the owner's other packages and look-alike names stay out).
+const nuget = 'https://www.nuget.org/packages?q=owner%3Aselcukgural+NPlusOne';
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -73,7 +75,18 @@ const config = {
           {type: 'docSidebar', sidebarId: 'guide', position: 'left', label: 'Guide'},
           {to: '/docs/rules/NP0001', label: 'Rules', position: 'left'},
           {to: '/docs/comparison', label: 'Comparison', position: 'left'},
-          {href: 'https://www.nuget.org/packages/NPlusOne.Analyzers', label: 'NuGet', position: 'right'},
+          {
+            type: 'dropdown',
+            label: 'Packages',
+            position: 'right',
+            items: [
+              {label: 'Which package where', to: '/docs/guide/packages'},
+              {label: 'NPlusOne.Analyzers', href: 'https://www.nuget.org/packages/NPlusOne.Analyzers'},
+              {label: 'NPlusOne.EntityFrameworkCore', href: 'https://www.nuget.org/packages/NPlusOne.EntityFrameworkCore'},
+              {label: 'NPlusOne.AspNetCore', href: 'https://www.nuget.org/packages/NPlusOne.AspNetCore'},
+              {label: 'All on NuGet', href: nuget},
+            ],
+          },
           {href: repository, label: 'GitHub', position: 'right'},
         ],
       },
@@ -91,9 +104,11 @@ const config = {
           {
             title: 'Packages',
             items: [
+              {label: 'Which package where', to: '/docs/guide/packages'},
               {label: 'NPlusOne.Analyzers', href: 'https://www.nuget.org/packages/NPlusOne.Analyzers'},
               {label: 'NPlusOne.EntityFrameworkCore', href: 'https://www.nuget.org/packages/NPlusOne.EntityFrameworkCore'},
               {label: 'NPlusOne.AspNetCore', href: 'https://www.nuget.org/packages/NPlusOne.AspNetCore'},
+              {label: 'Changelog', href: `${repository}/blob/main/CHANGELOG.md`},
             ],
           },
           {

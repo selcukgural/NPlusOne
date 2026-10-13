@@ -1,7 +1,9 @@
 # N+1
 
 [![CI](https://github.com/selcukgural/NPlusOne/actions/workflows/ci.yml/badge.svg)](https://github.com/selcukgural/NPlusOne/actions/workflows/ci.yml)
-[![NuGet](https://img.shields.io/nuget/v/NPlusOne.Analyzers.svg?label=NPlusOne.Analyzers)](https://www.nuget.org/packages/NPlusOne.Analyzers)
+[![NPlusOne.Analyzers](https://img.shields.io/nuget/v/NPlusOne.Analyzers.svg?label=NPlusOne.Analyzers)](https://www.nuget.org/packages/NPlusOne.Analyzers)
+[![NPlusOne.EntityFrameworkCore](https://img.shields.io/nuget/v/NPlusOne.EntityFrameworkCore.svg?label=NPlusOne.EntityFrameworkCore)](https://www.nuget.org/packages/NPlusOne.EntityFrameworkCore)
+[![NPlusOne.AspNetCore](https://img.shields.io/nuget/v/NPlusOne.AspNetCore.svg?label=NPlusOne.AspNetCore)](https://www.nuget.org/packages/NPlusOne.AspNetCore)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/selcukgural/NPlusOne/blob/main/LICENSE)
 
 Finds N+1 query problems in .NET and EF Core code: at build time with a Roslyn analyzer, and in tests and requests
@@ -13,7 +15,21 @@ OrderService.cs(42,31): warning NP0001: 'IOrderRepository.GetByCustomerAsync' ru
   elements up front with one query, Where(o => keys.Contains(o.CustomerId)), and group them with ToLookup(o => o.CustomerId).
 ```
 
-**Documentation: [selcukgural.github.io/NPlusOne](https://selcukgural.github.io/NPlusOne/)**
+**[Documentation](https://selcukgural.github.io/NPlusOne/)** ·
+**[Which package where](https://selcukgural.github.io/NPlusOne/docs/guide/packages)** ·
+**[All packages on NuGet](https://www.nuget.org/packages?q=owner%3Aselcukgural+NPlusOne)** ·
+**[Changelog](https://github.com/selcukgural/NPlusOne/blob/main/CHANGELOG.md)**
+
+## Packages
+
+Three packages, one for each place an N+1 can be caught, released together under one version. Use the analyzer, the
+guard, or both.
+
+| Package | Catches N+1 | Install |
+|---|---|---|
+| [NPlusOne.Analyzers](https://www.nuget.org/packages/NPlusOne.Analyzers) | at build time, in the IDE and in CI: the analyzer, its code fixes and the generator that follows calls across projects (a development dependency) | `dotnet add package NPlusOne.Analyzers` |
+| [NPlusOne.EntityFrameworkCore](https://www.nuget.org/packages/NPlusOne.EntityFrameworkCore) | in tests and any scope: the runtime guard, `AssertNoNPlusOne`, reports with normalized SQL and call sites, never parameter values | `dotnet add package NPlusOne.EntityFrameworkCore` |
+| [NPlusOne.AspNetCore](https://www.nuget.org/packages/NPlusOne.AspNetCore) | in HTTP requests: one guard scope per request, `[NPlusOneAssert]` for MVC and `.WithNPlusOneAssert()` for minimal APIs (brings the guard with it) | `dotnet add package NPlusOne.AspNetCore` |
 
 ## Quick start
 
@@ -93,14 +109,6 @@ same number, on EF Core 8, 9 and 10.
 
 Options (lazy loading, methods the analyzer cannot see into, call depth) are listed in
 [configuration](https://selcukgural.github.io/NPlusOne/docs/guide/configuration).
-
-## Packages
-
-| Package | Use it for |
-|---|---|
-| [NPlusOne.Analyzers](https://www.nuget.org/packages/NPlusOne.Analyzers) | The analyzer, its code fixes and the summary generator that follows calls across projects. A development dependency. |
-| [NPlusOne.EntityFrameworkCore](https://www.nuget.org/packages/NPlusOne.EntityFrameworkCore) | The runtime guard: scopes in tests or anywhere, `AssertNoNPlusOne`, reports with normalized SQL and call sites, never parameter values. |
-| [NPlusOne.AspNetCore](https://www.nuget.org/packages/NPlusOne.AspNetCore) | One guard scope per request, `[NPlusOneAssert]` for MVC and `.WithNPlusOneAssert()` for minimal APIs. |
 
 ## How it compares
 

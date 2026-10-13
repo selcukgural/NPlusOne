@@ -6,6 +6,7 @@ const sidebars = {
   guide: [
     'guide/introduction',
     'guide/getting-started',
+    'guide/packages',
     {
       type: 'category',
       label: 'Using N+1',

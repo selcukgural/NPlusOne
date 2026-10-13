@@ -27,6 +27,28 @@ const features = [
   },
 ];
 
+// One package per place an N+1 can be caught; each card gives the install command and where to read on.
+const packages = [
+  {
+    id: 'NPlusOne.Analyzers',
+    when: 'Build time',
+    text: 'The Roslyn analyzer, its code fixes and the generator that follows calls across projects. A development dependency: nothing ships with your app.',
+    docs: '/docs/guide/analyzer',
+  },
+  {
+    id: 'NPlusOne.EntityFrameworkCore',
+    when: 'Tests',
+    text: 'The runtime guard: UseNPlusOneGuard() on the DbContext, a scope per test, AssertNoNPlusOne(). Any test framework, no DI needed.',
+    docs: '/docs/runtime',
+  },
+  {
+    id: 'NPlusOne.AspNetCore',
+    when: 'Requests',
+    text: 'One guard scope per HTTP request, [NPlusOneAssert] for MVC and .WithNPlusOneAssert() for minimal APIs. Brings the guard with it.',
+    docs: '/docs/runtime#in-aspnet-core',
+  },
+];
+
 export default function Home() {
   const {siteConfig} = useDocusaurusContext();
   return (
@@ -38,6 +60,9 @@ export default function Home() {
           <div className={styles.buttons}>
             <Link className="button button--secondary button--lg" to="/docs/guide/getting-started">
               Get started in five minutes
+            </Link>
+            <Link className={clsx('button button--outline button--lg', styles.heroOutline)} to="/docs/guide/packages">
+              Choose your packages
             </Link>
           </div>
         </div>
@@ -53,6 +78,38 @@ export default function Home() {
             </div>
           ))}
         </div>
+        <section className="margin-top--lg">
+          <Heading as="h2">Three packages</Heading>
+          <p>
+            Released together under one version, all on{' '}
+            <Link href="https://www.nuget.org/packages?q=owner%3Aselcukgural+NPlusOne">NuGet</Link>. Use the analyzer,
+            the guard, or both.
+          </p>
+          <div className="row">
+            {packages.map((item) => (
+              <div key={item.id} className="col col--4 margin-bottom--md">
+                <div className={clsx('card', styles.package)}>
+                  <div className="card__header">
+                    <span className="badge badge--primary">{item.when}</span>
+                    <Heading as="h3" className={styles.packageName}>{item.id}</Heading>
+                  </div>
+                  <div className="card__body">
+                    <p>{item.text}</p>
+                    <CodeBlock language="bash">{`dotnet add package ${item.id}`}</CodeBlock>
+                  </div>
+                  <div className="card__footer">
+                    <Link className="button button--primary button--sm margin-right--sm" href={`https://www.nuget.org/packages/${item.id}`}>
+                      NuGet
+                    </Link>
+                    <Link className="button button--secondary button--sm" to={item.docs}>
+                      Docs
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </main>
     </Layout>
   );

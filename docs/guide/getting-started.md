@@ -5,7 +5,7 @@ sidebar_position: 2
 # Getting started
 
 Five minutes from nothing to a failing build and a failing test for an N+1 query. You need the .NET 8 SDK or later and
-a project that uses EF Core 8, 9 or 10.
+a project that uses EF Core 8, 9 or 10. [Packages](packages.md) lists the three packages and which project each goes in.
 
 ## 1. Add the analyzer
 
