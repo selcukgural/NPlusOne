@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+**`NPlusOne.Analyzers`**
+
+- Much cheaper in the IDE. After a keystroke the analyzer no longer reads every file of the project: it keeps what
+  depends only on declarations (the entity model, interface implementations, mediator handlers) and what unchanged
+  files configure (`AutoInclude`, AutoMapper and Mapster maps) for the next compilation. In a generated project of
+  1,000 files (130,000 lines), analysing the edited document went from about 830 ms and 180 MB to 170 ms and 46 MB;
+  building it got faster too. The findings are the same.
+
 ## 1.0.0
 
 The first release.

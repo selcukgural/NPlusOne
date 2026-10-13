@@ -21,6 +21,10 @@ internal sealed class Session
     /// <summary>The most summaries built inside one another on a thread.</summary>
     private const int MaxBuildDepth = 64;
 
+    /// <summary>The handler and pipeline behavior interfaces of MediatR and the Mediator library, without arity.</summary>
+    private static readonly ImmutableHashSet<string> MediatorInterfaces = ImmutableHashSet.Create(
+        StringComparer.Ordinal, "IRequestHandler", "ICommandHandler", "IQueryHandler", "IStreamRequestHandler", "INotificationHandler", "IPipelineBehavior");
+
     /// <summary>Methods whose summary is being built on this thread, so recursion yields an empty summary instead of looping.</summary>
     [ThreadStatic]
     private static HashSet<IMethodSymbol>? _building;
@@ -33,7 +37,9 @@ internal sealed class Session
     private readonly ConcurrentDictionary<IMethodSymbol, ImmutableArray<IMethodSymbol>> _targets = new(SymbolEqualityComparer.Default);
     private readonly ConcurrentDictionary<WitnessKey, Witness?> _witnesses = new();
     private readonly Lazy<ImmutableArray<INamedTypeSymbol>> _sourceTypes;
-    private readonly Lazy<ImmutableArray<INamedTypeSymbol>> _candidateTypes;
+    private readonly Lazy<DispatchCandidates> _candidateTypes;
+    private readonly DeclarationFacts _facts;
+    private readonly ConcurrentDictionary<string, Lazy<ImmutableArray<INamedTypeSymbol>>> _mediatorTypes = new(StringComparer.Ordinal);
     private readonly Lazy<ReferencedSummaries> _referenced;
     private readonly Lazy<ImmutableHashSet<IMethodSymbol>> _endpointHandlers;
     private readonly ConcurrentDictionary<ISymbol, SourceInfo> _assigned = new(SymbolEqualityComparer.Default);
@@ -52,10 +58,11 @@ internal sealed class Session
         Symbols = symbols;
         Settings = settings;
         _referenced = new Lazy<ReferencedSummaries>(() => ReferencedSummaries.Read(compilation));
-        Entities = new EntityModel(compilation, symbols, settings.LazyLoading, () => _referenced.Value.AutoIncludes(compilation));
+        _facts = DeclarationFacts.For(compilation);
+        Entities = new EntityModel(compilation, symbols, settings.LazyLoading, () => _referenced.Value.AutoIncludes(compilation), _facts);
         _sourceTypes = new Lazy<ImmutableArray<INamedTypeSymbol>>(CollectSourceTypes);
-        _candidateTypes = new Lazy<ImmutableArray<INamedTypeSymbol>>(CollectCandidateTypes);
-        Mappings = new Mappings(compilation, Entities, symbols);
+        _candidateTypes = new Lazy<DispatchCandidates>(CollectCandidateTypes);
+        Mappings = new Mappings(compilation, Entities, symbols, _facts);
         _endpointHandlers = new Lazy<ImmutableHashSet<IMethodSymbol>>(CollectEndpointHandlers);
         _registeredBehaviors = new Lazy<ImmutableHashSet<ITypeSymbol>>(CollectRegisteredBehaviors);
         _mvcUsesNewtonsoft = new Lazy<bool>(CallsAddNewtonsoftJson);
@@ -73,18 +80,13 @@ internal sealed class Session
     {
         foreach (var tree in Compilation.SyntaxTrees)
         {
-            if (!tree.GetText().ToString().Contains("AddNewtonsoftJson"))
+            SemanticModel? model = null;
+            foreach (var call in SyntaxIndex.CallsTo(tree, "AddNewtonsoftJson"))
             {
-                continue;
-            }
-
 #pragma warning disable RS1030 // The registration lives in the startup code, not in the controllers; this runs once per compilation.
-            var model = Compilation.GetSemanticModel(tree);
+                model ??= Compilation.GetSemanticModel(tree);
 #pragma warning restore RS1030
-            foreach (var node in tree.GetRoot().DescendantNodes())
-            {
-                if (node is InvocationExpressionSyntax
-                    && model.GetSymbolInfo(node).Symbol is IMethodSymbol { Name: "AddNewtonsoftJson", ContainingType.Name: "NewtonsoftJsonMvcBuilderExtensions" })
+                if (model.GetSymbolInfo(call).Symbol is IMethodSymbol { Name: "AddNewtonsoftJson", ContainingType.Name: "NewtonsoftJsonMvcBuilderExtensions" })
                 {
                     return true;
                 }
@@ -310,7 +312,7 @@ internal sealed class Session
     private ImmutableArray<IMethodSymbol> FindHandlers(ITypeSymbol request, string call, string mediatorNamespace)
     {
         var builder = ImmutableArray.CreateBuilder<IMethodSymbol>();
-        foreach (var type in _sourceTypes.Value)
+        foreach (var type in MediatorTypes(mediatorNamespace))
         {
             foreach (var iface in type.AllInterfaces)
             {
@@ -339,6 +341,16 @@ internal sealed class Session
 
         return builder.ToImmutable();
     }
+
+    /// <summary>
+    /// The candidate types implementing a handler or pipeline behavior interface of the mediator library, found once per
+    /// compilation (every <c>Send</c> asks) from the interface map kept for the compilations with the same declarations.
+    /// </summary>
+    /// <param name="mediatorNamespace">The namespace of the mediator library.</param>
+    private ImmutableArray<INamedTypeSymbol> MediatorTypes(string mediatorNamespace)
+        => _mediatorTypes.GetOrAdd(
+            mediatorNamespace,
+            ns => new Lazy<ImmutableArray<INamedTypeSymbol>>(() => _facts.ImplementersOfAny(Compilation, _candidateTypes.Value.Implementing, ns, MediatorInterfaces))).Value;
 
     /// <summary>Adds a type's implementation of the interface's <c>Handle</c>, when its source is in the compilation.</summary>
     /// <param name="builder">The handlers found so far.</param>
@@ -417,8 +429,8 @@ internal sealed class Session
         var registered = ImmutableHashSet.CreateBuilder<ITypeSymbol>(SymbolEqualityComparer.Default);
         foreach (var tree in Compilation.SyntaxTrees)
         {
-            var text = tree.GetText().ToString();
-            if (!text.Contains("PipelineBehavior") && !text.Contains("AddBehavior") && !text.Contains("AddOpenBehavior"))
+            var nodes = SyntaxIndex.Of(tree).BehaviorTypes;
+            if (nodes.IsEmpty)
             {
                 continue;
             }
@@ -426,7 +438,7 @@ internal sealed class Session
 #pragma warning disable RS1030 // Registrations live in other files than the Send calls; this runs once per compilation.
             var model = Compilation.GetSemanticModel(tree);
 #pragma warning restore RS1030
-            foreach (var node in tree.GetRoot().DescendantNodes())
+            foreach (var node in nodes)
             {
                 var named = node switch
                 {
@@ -853,7 +865,10 @@ internal sealed class Session
             return builder.ToImmutable();
         }
 
-        foreach (var type in _candidateTypes.Value)
+        var candidates = method.ContainingType.TypeKind == TypeKind.Interface
+            ? Implementers(method.ContainingType.OriginalDefinition)
+            : _candidateTypes.Value.Overriding;
+        foreach (var type in candidates)
         {
             if (builder.Count >= MaxImplementations)
             {
@@ -870,6 +885,14 @@ internal sealed class Session
 
         return builder.ToImmutable();
     }
+
+    /// <summary>
+    /// The candidate types implementing an interface, directly, through a base type or another interface. Kept for the
+    /// next compilation with the same declarations: the test resolves the base types of every type.
+    /// </summary>
+    /// <param name="iface">The interface definition.</param>
+    private ImmutableArray<INamedTypeSymbol> Implementers(INamedTypeSymbol iface)
+        => _facts.Implementers(Compilation, _candidateTypes.Value.Implementing, iface);
 
     /// <summary>The member of <paramref name="type"/> that a call to <paramref name="method"/> runs on an instance of it.</summary>
     /// <param name="type">A source type.</param>
@@ -949,7 +972,7 @@ internal sealed class Session
     }
 
     /// <summary>Every named type declared in source, nested ones included.</summary>
-    private ImmutableArray<INamedTypeSymbol> CollectSourceTypes() => CollectTypes(Compilation.Assembly.GlobalNamespace);
+    private ImmutableArray<INamedTypeSymbol> CollectSourceTypes() => Model.Symbols.AllTypes(Compilation.Assembly.GlobalNamespace).ToImmutableArray();
 
     /// <summary>
     /// Whether a method is passed by name to a minimal API mapping as its handler
@@ -961,16 +984,15 @@ internal sealed class Session
 
     /// <summary>
     /// The methods passed as method groups to <c>MapGet</c>, <c>MapPost</c>, ... in the compilation. Only files
-    /// that mention one of those names get a semantic model.
+    /// that call one of those get a semantic model, and only their <c>Map*</c> calls are bound.
     /// </summary>
     private ImmutableHashSet<IMethodSymbol> CollectEndpointHandlers()
     {
         var builder = ImmutableHashSet.CreateBuilder<IMethodSymbol>(SymbolEqualityComparer.Default);
         foreach (var tree in Compilation.SyntaxTrees)
         {
-            var text = tree.GetText().ToString();
-            if (!text.Contains(".MapGet(") && !text.Contains(".MapPost(") && !text.Contains(".MapPut(")
-                && !text.Contains(".MapDelete(") && !text.Contains(".MapPatch(") && !text.Contains(".MapMethods("))
+            var mappings = SyntaxIndex.Of(tree).Mappings;
+            if (mappings.IsEmpty)
             {
                 continue;
             }
@@ -978,11 +1000,9 @@ internal sealed class Session
 #pragma warning disable RS1030 // Handlers are declared elsewhere than where they are mapped; this runs once per compilation.
             var model = Compilation.GetSemanticModel(tree);
 #pragma warning restore RS1030
-            foreach (var node in tree.GetRoot().DescendantNodes())
+            foreach (var mapping in mappings)
             {
-                if (node is not InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: var name } }
-                    || !name.StartsWith("Map", StringComparison.Ordinal)
-                    || model.GetOperation(node) is not IInvocationOperation invocation
+                if (model.GetOperation(mapping) is not IInvocationOperation invocation
                     || !BlockAnalyzer.IsEndpointMapping(invocation.TargetMethod))
                 {
                     continue;
@@ -1002,45 +1022,36 @@ internal sealed class Session
     }
 
     /// <summary>
-    /// The types an interface or virtual call can land in: the source types, and the types of
-    /// referenced assemblies that wrote complete summaries.
+    /// The types an interface or virtual call can land in: the source types, and the types of referenced assemblies that
+    /// wrote complete summaries. Split by what their syntax allows, so a call does not make the compiler resolve the
+    /// base types or build the members of every type: an interface call can only land in a type with a base list, a
+    /// virtual call only in a type that declares an override.
     /// </summary>
-    private ImmutableArray<INamedTypeSymbol> CollectCandidateTypes()
+    private DispatchCandidates CollectCandidateTypes()
     {
-        var builder = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
-        builder.AddRange(_sourceTypes.Value);
-        foreach (var assembly in _referenced.Value.CompleteAssemblies)
+        var implementing = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
+        var overriding = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
+        foreach (var type in _sourceTypes.Value)
         {
-            builder.AddRange(CollectTypes(assembly.GlobalNamespace));
-        }
-
-        return builder.ToImmutable();
-    }
-
-    /// <summary>Every named type in a namespace tree, nested ones included.</summary>
-    /// <param name="root">The root namespace.</param>
-    private static ImmutableArray<INamedTypeSymbol> CollectTypes(INamespaceSymbol root)
-    {
-        var builder = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
-        var stack = new Stack<INamespaceOrTypeSymbol>();
-        stack.Push(root);
-        while (stack.Count > 0)
-        {
-            foreach (var member in stack.Pop().GetMembers())
+            if (Model.Symbols.MayDeriveOrImplement(type))
             {
-                if (member is INamespaceSymbol ns)
-                {
-                    stack.Push(ns);
-                }
-                else if (member is INamedTypeSymbol type)
-                {
-                    builder.Add(type);
-                    stack.Push(type);
-                }
+                implementing.Add(type);
+            }
+
+            if (Model.Symbols.MayOverride(type))
+            {
+                overriding.Add(type);
             }
         }
 
-        return builder.ToImmutable();
+        foreach (var assembly in _referenced.Value.CompleteAssemblies)
+        {
+            var types = Model.Symbols.AllTypes(assembly.GlobalNamespace).ToList();
+            implementing.AddRange(types);
+            overriding.AddRange(types);
+        }
+
+        return new DispatchCandidates(implementing.ToImmutable(), overriding.ToImmutable());
     }
 
     /// <summary>Replaces parameter sources in a callee's arguments with the caller's arguments.</summary>
@@ -1084,6 +1095,11 @@ internal sealed class Session
     /// <param name="known">A known symbol, possibly missing.</param>
     private static bool Is(INamedTypeSymbol? type, INamedTypeSymbol? known)
         => type is not null && known is not null && SymbolEqualityComparer.Default.Equals(type, known);
+
+    /// <summary>The types a dispatched call can land in.</summary>
+    /// <param name="Implementing">The types that may implement an interface.</param>
+    /// <param name="Overriding">The types that may override a virtual member.</param>
+    private sealed record DispatchCandidates(ImmutableArray<INamedTypeSymbol> Implementing, ImmutableArray<INamedTypeSymbol> Overriding);
 
     /// <summary>The key of a cached witness search.</summary>
     /// <param name="Method">The method called.</param>

@@ -18,13 +18,19 @@ namespace NPlusOne.Analyzers.Model;
 /// <param name="symbols">Its known symbols.</param>
 /// <param name="mode">The lazy loading setting.</param>
 /// <param name="referencedAutoIncludes">The navigations referenced projects' models auto-include, read on first use.</param>
-internal sealed class EntityModel(Compilation compilation, KnownSymbols symbols, LazyLoadingMode mode, Func<ImmutableHashSet<IPropertySymbol>> referencedAutoIncludes)
+/// <param name="facts">Where the entities are kept for the next compilation with the same declarations.</param>
+internal sealed class EntityModel(
+    Compilation compilation,
+    KnownSymbols symbols,
+    LazyLoadingMode mode,
+    Func<ImmutableHashSet<IPropertySymbol>> referencedAutoIncludes,
+    DeclarationFacts facts)
 {
     /// <summary>Assemblies whose types are never entities, skipped to keep the scan cheap.</summary>
     private static readonly string[] FrameworkPrefixes = ["System", "Microsoft", "mscorlib", "netstandard", "Newtonsoft", "xunit", "NUnit", "Castle"];
 
     private readonly KnownSymbols _symbols = symbols;
-    private readonly ImmutableHashSet<ITypeSymbol> _entities = CollectEntities(compilation, symbols);
+    private readonly ImmutableHashSet<ITypeSymbol> _entities = facts.Entities(compilation, () => CollectEntities(compilation, symbols));
 
     /// <summary>Whether proxies can load navigations: forced by the setting, or the proxies package is referenced.</summary>
     private readonly bool _lazyLoadingAvailable = mode switch
@@ -40,7 +46,7 @@ internal sealed class EntityModel(Compilation compilation, KnownSymbols symbols,
     private int _lazyLoaderEntity;
 
     /// <summary>The navigations the model configures with <c>AutoInclude()</c>, found on first use.</summary>
-    private readonly Lazy<ImmutableHashSet<IPropertySymbol>> _autoIncluded = new(() => CollectAutoIncludes(compilation));
+    private readonly Lazy<ImmutableHashSet<IPropertySymbol>> _autoIncluded = new(() => CollectAutoIncludes(compilation, facts));
     private readonly Lazy<ImmutableHashSet<IPropertySymbol>> _referencedAutoIncluded = new(referencedAutoIncludes);
 
     /// <summary>The navigations this compilation's own model configuration auto-includes, which the summary generator exports.</summary>
@@ -86,8 +92,9 @@ internal sealed class EntityModel(Compilation compilation, KnownSymbols symbols,
     /// <param name="symbols">Its known symbols.</param>
     private static ImmutableHashSet<ITypeSymbol> CollectEntities(Compilation compilation, KnownSymbols symbols)
     {
+        // Contexts, configurations and derived entities all name a base type or an interface.
         var roots = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-        var candidates = CandidateTypes(compilation).ToList();
+        var candidates = CandidateTypes(compilation).Where(Symbols.MayDeriveOrImplement).ToList();
         foreach (var type in candidates)
         {
             if (KnownSymbols.InheritsFrom(type, symbols.DbContext) && symbols.DbSet is not null)
@@ -163,6 +170,11 @@ internal sealed class EntityModel(Compilation compilation, KnownSymbols symbols,
             var current = pending.Pop();
             foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
             {
+                if (Symbols.HasBuiltInType(property))
+                {
+                    continue;
+                }
+
                 var target = symbols.ElementType(property.Type) ?? property.Type;
                 if (target is not INamedTypeSymbol { TypeKind: TypeKind.Class } named || entities.Contains(named.OriginalDefinition))
                 {
@@ -184,7 +196,7 @@ internal sealed class EntityModel(Compilation compilation, KnownSymbols symbols,
     /// <param name="compilation">The compilation.</param>
     private static IEnumerable<INamedTypeSymbol> CandidateTypes(Compilation compilation)
     {
-        foreach (var type in AllTypes(compilation.Assembly.GlobalNamespace))
+        foreach (var type in Symbols.AllTypes(compilation.Assembly.GlobalNamespace))
         {
             yield return type;
         }
@@ -196,33 +208,9 @@ internal sealed class EntityModel(Compilation compilation, KnownSymbols symbols,
                 continue;
             }
 
-            foreach (var type in AllTypes(assembly.GlobalNamespace))
+            foreach (var type in Symbols.AllTypes(assembly.GlobalNamespace))
             {
                 yield return type;
-            }
-        }
-    }
-
-    /// <summary>Every type in a namespace tree, nested types included.</summary>
-    /// <param name="ns">The root namespace.</param>
-    private static IEnumerable<INamedTypeSymbol> AllTypes(INamespaceSymbol ns)
-    {
-        var stack = new Stack<INamespaceOrTypeSymbol>();
-        stack.Push(ns);
-        while (stack.Count > 0)
-        {
-            var current = stack.Pop();
-            foreach (var member in current.GetMembers())
-            {
-                if (member is INamespaceSymbol childNamespace)
-                {
-                    stack.Push(childNamespace);
-                }
-                else if (member is INamedTypeSymbol type)
-                {
-                    yield return type;
-                    stack.Push(type);
-                }
             }
         }
     }
@@ -286,7 +274,7 @@ internal sealed class EntityModel(Compilation compilation, KnownSymbols symbols,
         {
             foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
             {
-                if (property.IsStatic || property.GetMethod is null)
+                if (property.IsStatic || property.GetMethod is null || Symbols.HasBuiltInType(property))
                 {
                     continue;
                 }
@@ -354,39 +342,59 @@ internal sealed class EntityModel(Compilation compilation, KnownSymbols symbols,
 
     /// <summary>
     /// Finds <c>builder.Navigation(x =&gt; x.Prop).AutoInclude()</c> calls in the compilation's model
-    /// configuration (<c>OnModelCreating</c>, <c>IEntityTypeConfiguration</c>). Only files that mention
-    /// <c>AutoInclude</c> get a semantic model, so the scan costs nothing in projects that do not use it.
+    /// configuration (<c>OnModelCreating</c>, <c>IEntityTypeConfiguration</c>). Only files that call
+    /// <c>AutoInclude</c> get a semantic model, so the scan costs nothing in projects that do not use it; and each such
+    /// file is bound once for the compilations with the same declarations that contain it unchanged.
     /// </summary>
     /// <param name="compilation">The compilation.</param>
-    private static ImmutableHashSet<IPropertySymbol> CollectAutoIncludes(Compilation compilation)
+    /// <param name="facts">Where each file's answer is kept, by name.</param>
+    private static ImmutableHashSet<IPropertySymbol> CollectAutoIncludes(Compilation compilation, DeclarationFacts facts)
     {
         var builder = ImmutableHashSet.CreateBuilder<IPropertySymbol>(SymbolEqualityComparer.Default);
         foreach (var tree in compilation.SyntaxTrees)
         {
-            if (!tree.GetText().ToString().Contains("AutoInclude"))
+            if (!SyntaxIndex.CallsTo(tree, "AutoInclude").Any())
             {
                 continue;
             }
 
-#pragma warning disable RS1030 // Model configuration lives in other files than the code being analysed; this runs once per compilation.
-            var model = compilation.GetSemanticModel(tree);
-#pragma warning restore RS1030
-            foreach (var node in tree.GetRoot().DescendantNodes())
+            var named = facts.ForTree(tree, "AutoInclude", () => PropertyName.Of(compilation, AutoIncludesIn(compilation, tree)));
+            if (named is null || PropertyName.Resolve(compilation, named) is not { } properties)
             {
-                if (node is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "AutoInclude" } }
-                    && model.GetOperation(node) is IInvocationOperation invocation
-                    && !DisablesAutoInclude(invocation)
-                    && invocation.Instance is IInvocationOperation { TargetMethod.Name: "Navigation" } navigation
-                    && navigation.Arguments.Length > 0
-                    && navigation.Arguments[0].Value is var argument
-                    && FindProperty(argument) is { } property)
-                {
-                    builder.Add(property.OriginalDefinition);
-                }
+                properties = AutoIncludesIn(compilation, tree);
             }
+
+            builder.UnionWith(properties);
         }
 
         return builder.ToImmutable();
+    }
+
+    /// <summary>The navigations one file's <c>AutoInclude</c> calls configure.</summary>
+    /// <param name="compilation">The compilation.</param>
+    /// <param name="tree">The file.</param>
+    private static List<IPropertySymbol> AutoIncludesIn(Compilation compilation, SyntaxTree tree)
+    {
+        var properties = new List<IPropertySymbol>();
+        SemanticModel? model = null;
+        foreach (var call in SyntaxIndex.CallsTo(tree, "AutoInclude"))
+        {
+#pragma warning disable RS1030 // Model configuration lives in other files than the code being analysed; this runs once per compilation.
+            model ??= compilation.GetSemanticModel(tree);
+#pragma warning restore RS1030
+            if (call.Expression is MemberAccessExpressionSyntax
+                && model.GetOperation(call) is IInvocationOperation invocation
+                && !DisablesAutoInclude(invocation)
+                && invocation.Instance is IInvocationOperation { TargetMethod.Name: "Navigation" } navigation
+                && navigation.Arguments.Length > 0
+                && navigation.Arguments[0].Value is var argument
+                && FindProperty(argument) is { } property)
+            {
+                properties.Add(property.OriginalDefinition);
+            }
+        }
+
+        return properties;
     }
 
     /// <summary>Whether the call is <c>AutoInclude(false)</c>.</summary>

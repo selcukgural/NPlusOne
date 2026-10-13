@@ -340,10 +340,20 @@ assigned source is never read half-built by another thread. Counter-checks `tool
 
 ## 7. After 1.0 (next)
 
-- **IDE performance.** Every keystroke makes a new compilation, and with it a new session: the whole-compilation walks
-  (endpoint mappings, registered pipeline behaviors, the values assigned to fields, the entity model) run again on the
-  first block that needs them. Measure on a large solution, then cache what depends only on syntax per syntax tree, and
-  skip trees that cannot contribute (no `Map*`, no `AddBehavior`) without materializing their text.
+- ~~**IDE performance.**~~ (done 2026-10-13) `PerformanceTests` (`NPLUSONE_BENCH=<modules>`) generates an application
+  and times one document's analysis after a keystroke, next to an analyzer that only subscribes to the same operations.
+  Measured first: per keystroke the analyzer rebuilt the entity model (base types of every type, every property type),
+  scanned every implementation candidate for each interface or virtual call, and bound every mapper profile and
+  `AutoInclude` file, all linear in the project's size. Now the whole-compilation scans read a per-tree `SyntaxIndex`
+  (only the edited file is walked again, no file's text is read), types are walked for nested types only, the syntax
+  rules types out before the compiler resolves them (no base list, no `override`, built-in property types), and
+  `DeclarationFacts` keeps by name what depends only on declarations (entities, interface implementers, mediator
+  handlers) and what unchanged files configure (`AutoInclude`, which map each `CreateMap` configures) for the next
+  compilation with the same declarations hash and references. At 1,000 modules (130,000 lines in one project) a
+  keystroke went from 830 ms and 180 MB to 170 ms and 46 MB (floor 45 ms); at 2,000 from 1.8 s to 0.26 s, and analysing
+  the whole compilation from 15 s to 12 s. Same findings on the corpus and the benchmark. `IncrementalTests` edit one
+  file at a time (an added `DbSet`, a moved base list, a changed constant, a changed referenced project, partial and
+  nested types); counter-check `tools/countercheck/29-ide-performance.json`: all 13 parts red when undone.
 
 - **ABP samples.** Scan the ABP framework's sample applications with `tools/scan.sh` and triage, like eShop.
 - **GraphQL resolvers (catalogue C24).** Hot Chocolate type-extension resolvers taking `[Parent]` run once per parent

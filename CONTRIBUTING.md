@@ -71,6 +71,13 @@ review.
 - **Analyzers run on every keystroke.** Cache per compilation, never per call; bound every
   walk (call depth, number of implementations); no LINQ in per-operation callbacks when a plain
   loop is as clear. Banned analyzer APIs (file and network access, `Console`) stay banned (RS1035).
+- **A keystroke must not cost a whole compilation.** An IDE makes a new compilation on every edit. A
+  scan over every file reads the per-tree `SyntaxIndex` (kept with the tree, so only the edited file
+  is walked again), never the files' text; ask the syntax before the symbols when the syntax can rule
+  a type out. What depends only on declarations, or on what an unchanged file binds to, is kept
+  across compilations in `DeclarationFacts`, by name and never as symbols, and an `IncrementalTests`
+  case shows an edit that changes it is not answered from the previous compilation. Measure with
+  `PerformanceTests` before and after.
 - **Every rule has a page** in `docs/rules/` with what it detects, why it matters, how to fix it,
   how to configure it and what it cannot see.
 

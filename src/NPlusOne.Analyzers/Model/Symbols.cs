@@ -1,5 +1,7 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace NPlusOne.Analyzers.Model;
 
@@ -26,6 +28,100 @@ internal static class Symbols
 
         return builder.ToString();
     }
+
+    /// <summary>
+    /// Every type in a namespace tree, nested types included. Types are asked for their nested types only: their other
+    /// members would make the compiler bind every signature of every type, again in each keystroke's compilation.
+    /// </summary>
+    /// <param name="root">The root namespace.</param>
+    public static IEnumerable<INamedTypeSymbol> AllTypes(INamespaceSymbol root)
+    {
+        var stack = new Stack<INamespaceOrTypeSymbol>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            if (current is INamespaceSymbol ns)
+            {
+                foreach (var child in ns.GetNamespaceMembers())
+                {
+                    stack.Push(child);
+                }
+            }
+
+            foreach (var type in current.GetTypeMembers())
+            {
+                yield return type;
+                stack.Push(type);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a type can derive from another class or implement an interface: false only when its source shows no base
+    /// list (<c>class Order { ... }</c> derives from <c>object</c> and implements nothing). Asking the syntax first keeps
+    /// the compiler from resolving the base types of every type in the compilation, again on each keystroke.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    public static bool MayDeriveOrImplement(INamedTypeSymbol type)
+    {
+        var references = type.DeclaringSyntaxReferences;
+        if (references.IsEmpty)
+        {
+            return true;
+        }
+
+        foreach (var reference in references)
+        {
+            if (reference.GetSyntax() is not BaseTypeDeclarationSyntax { BaseList: null })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a type can override a virtual member: false only when its source declares no member with
+    /// <c>override</c>. Asking the syntax first keeps the compiler from building the members of every type.
+    /// </summary>
+    /// <param name="type">The type.</param>
+    public static bool MayOverride(INamedTypeSymbol type)
+    {
+        var references = type.DeclaringSyntaxReferences;
+        if (references.IsEmpty)
+        {
+            return true;
+        }
+
+        foreach (var reference in references)
+        {
+            if (reference.GetSyntax() is not TypeDeclarationSyntax declaration)
+            {
+                return true;
+            }
+
+            foreach (var member in declaration.Members)
+            {
+                if (member.Modifiers.Any(SyntaxKind.OverrideKeyword))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a property's source declares it with a built-in type (<c>int</c>, <c>string?</c>, ...), which is never an
+    /// entity or a collection of entities. Asking the syntax first spares binding the type of every scalar property.
+    /// </summary>
+    /// <param name="property">The property.</param>
+    public static bool HasBuiltInType(IPropertySymbol property)
+        => property.DeclaringSyntaxReferences is { Length: 1 } references
+           && references[0].GetSyntax() is PropertyDeclarationSyntax { Type: PredefinedTypeSyntax or NullableTypeSyntax { ElementType: PredefinedTypeSyntax } };
 
     /// <summary>A method as messages show it: <c>Type.Method</c>, or just the name of a local function.</summary>
     /// <param name="method">The method.</param>

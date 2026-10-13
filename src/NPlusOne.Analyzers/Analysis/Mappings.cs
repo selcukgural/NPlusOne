@@ -35,12 +35,14 @@ internal sealed record MapperCall(IOperation Source, ITypeSymbol Destination, Ma
 /// <param name="compilation">The compilation.</param>
 /// <param name="entities">Its entity model.</param>
 /// <param name="symbols">Its known symbols.</param>
-internal sealed class Mappings(Compilation compilation, EntityModel entities, KnownSymbols symbols)
+/// <param name="facts">Where which map each configuration call configures is kept for the next compilation.</param>
+internal sealed class Mappings(Compilation compilation, EntityModel entities, KnownSymbols symbols, DeclarationFacts facts)
 {
     /// <summary>How deep nested destination objects are followed.</summary>
     private const int MaxDepth = 2;
 
-    private readonly Lazy<Dictionary<(MapperLibrary Library, ITypeSymbol Source, ITypeSymbol Destination), MapConfiguration>> _maps = new(() => CollectMaps(compilation));
+    private readonly ConcurrentDictionary<(MapperLibrary Library, ITypeSymbol Source, ITypeSymbol Destination), MapConfiguration?> _maps = new();
+    private readonly Lazy<MapIndex> _index = new(() => IndexMaps(compilation, facts));
     private readonly ConcurrentDictionary<(MapperLibrary, ITypeSymbol, ITypeSymbol), MappingReads> _reads = new();
 
     /// <summary>
@@ -85,7 +87,7 @@ internal sealed class Mappings(Compilation compilation, EntityModel entities, Kn
     public MappingReads Reads(ITypeSymbol source, ITypeSymbol destination, MapperLibrary library)
     {
         var key = (library, source.OriginalDefinition, destination.OriginalDefinition);
-        return _reads.GetOrAdd(key, k => _maps.Value.TryGetValue(k, out var map)
+        return _reads.GetOrAdd(key, k => _maps.GetOrAdd(k, CollectMap) is { } map
             ? Configured(source, destination, map)
             : new MappingReads(Convention(source, destination, MaxDepth), ImmutableArray<MapperCallback>.Empty, false));
     }
@@ -280,73 +282,178 @@ internal sealed class Mappings(Compilation compilation, EntityModel entities, Kn
     }
 
     /// <summary>
-    /// Reads every AutoMapper <c>CreateMap&lt;TSource, TDestination&gt;()</c> and Mapster
-    /// <c>NewConfig</c>/<c>ForType</c> in the compilation, with the member overrides chained on them.
-    /// Only files that mention one of them get a semantic model.
+    /// Reads one map's configuration: every AutoMapper <c>CreateMap&lt;TSource, TDestination&gt;()</c> and Mapster
+    /// <c>NewConfig</c>/<c>ForType</c> in the compilation that configures it, with the member overrides chained on them;
+    /// null when none does. Only files that call one of them get a semantic model. Which map each call configures is kept
+    /// by name for the compilations with the same declarations that contain its file unchanged, so after a keystroke only
+    /// the calls of the requested map, and those of the edited file, are bound.
     /// </summary>
-    /// <param name="compilation">The compilation.</param>
-    private static Dictionary<(MapperLibrary, ITypeSymbol, ITypeSymbol), MapConfiguration> CollectMaps(Compilation compilation)
+    /// <param name="key">The library and the source and destination definitions.</param>
+    private MapConfiguration? CollectMap((MapperLibrary Library, ITypeSymbol Source, ITypeSymbol Destination) key)
     {
-        var maps = new Dictionary<(MapperLibrary, ITypeSymbol, ITypeSymbol), MapConfiguration>();
-        foreach (var tree in compilation.SyntaxTrees)
+        var index = _index.Value;
+        var positions = new List<int>(index.Unnamed);
+        if (TypeName.Of(compilation, key.Source) is { } source && TypeName.Of(compilation, key.Destination) is { } destination)
         {
-            var text = tree.GetText().ToString();
-            if (!text.Contains("CreateMap") && !text.Contains("NewConfig") && !text.Contains("ForType"))
+            if (index.Named.TryGetValue(new MapKey(key.Library, source, destination), out var named))
+            {
+                positions.AddRange(named);
+                positions.Sort();
+            }
+        }
+        else
+        {
+            positions = [.. Enumerable.Range(0, index.Calls.Count)];
+        }
+
+        MapConfiguration? map = null;
+        var models = new Dictionary<SyntaxTree, SemanticModel>();
+        foreach (var position in positions)
+        {
+            var (tree, call) = index.Calls[position];
+            if (!models.TryGetValue(tree, out var model))
+            {
+#pragma warning disable RS1030 // Mapping profiles live in other files than the mapping calls; each map is read once per compilation.
+                model = compilation.GetSemanticModel(tree);
+#pragma warning restore RS1030
+                models[tree] = model;
+            }
+
+            if (Configuration(model, call) is not var (configuration, expression, library)
+                || library != key.Library
+                || !SymbolEqualityComparer.Default.Equals(expression.TypeArguments[0].OriginalDefinition, key.Source)
+                || !SymbolEqualityComparer.Default.Equals(expression.TypeArguments[1].OriginalDefinition, key.Destination))
             {
                 continue;
             }
 
-#pragma warning disable RS1030 // Mapping profiles live in other files than the mapping calls; this runs once per compilation.
-            var model = compilation.GetSemanticModel(tree);
-#pragma warning restore RS1030
-            foreach (var node in tree.GetRoot().DescendantNodes())
+            map ??= new MapConfiguration();
+
+            // Calls chained on the configuration call configure the same map as long as they return
+            // the same expression type; ReverseMap starts the opposite map and ends the chain, and
+            // ConvertUsing, which returns nothing, ends it too.
+            for (IOperation current = configuration;
+                 current.Parent is IInvocationOperation chained && chained.Instance == current
+                 && (SymbolEqualityComparer.Default.Equals(chained.Type, expression) || chained.TargetMethod.Name == "ConvertUsing");
+                 current = chained)
             {
-                if (node is not InvocationExpressionSyntax syntax
-                    || ConfigurationMethodName(syntax) is not ("CreateMap" or "NewConfig" or "ForType")
-                    || model.GetOperation(node) is not IInvocationOperation { Type: INamedTypeSymbol { TypeArguments.Length: 2 } expression } configuration
-                    || MapOf(configuration, expression) is not { } library)
+                if (library == MapperLibrary.AutoMapper)
                 {
-                    continue;
+                    ReadAutoMapperCall(chained, map);
                 }
-
-                var key = (library, expression.TypeArguments[0].OriginalDefinition, expression.TypeArguments[1].OriginalDefinition);
-                if (!maps.TryGetValue(key, out var map))
+                else
                 {
-                    map = new MapConfiguration();
-                    maps[key] = map;
-                }
-
-                // Calls chained on the configuration call configure the same map as long as they return
-                // the same expression type; ReverseMap starts the opposite map and ends the chain, and
-                // ConvertUsing, which returns nothing, ends it too.
-                for (IOperation current = configuration;
-                     current.Parent is IInvocationOperation chained && chained.Instance == current
-                     && (SymbolEqualityComparer.Default.Equals(chained.Type, expression) || chained.TargetMethod.Name == "ConvertUsing");
-                     current = chained)
-                {
-                    if (library == MapperLibrary.AutoMapper)
-                    {
-                        ReadAutoMapperCall(chained, map);
-                    }
-                    else
-                    {
-                        ReadMapsterOverride(chained, map.Members);
-                    }
+                    ReadMapsterOverride(chained, map.Members);
                 }
             }
         }
 
-        return maps;
+        return map;
     }
 
-    /// <summary>The name a configuration call is made by, generic or not, with or without a receiver.</summary>
-    /// <param name="syntax">The invocation.</param>
-    private static string? ConfigurationMethodName(InvocationExpressionSyntax syntax) => syntax.Expression switch
+    /// <summary>
+    /// Every configuration call of the compilation, in file order, with the map each one configures. A file's calls are
+    /// bound to name their maps once for the compilations with the same declarations that contain it unchanged.
+    /// </summary>
+    /// <param name="compilation">The compilation.</param>
+    /// <param name="facts">Where each file's maps are kept by name.</param>
+    private static MapIndex IndexMaps(Compilation compilation, DeclarationFacts facts)
     {
-        SimpleNameSyntax name => name.Identifier.ValueText,
-        MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
-        _ => null,
-    };
+        var index = new MapIndex([], [], []);
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            var calls = SyntaxIndex.Of(tree).Calls;
+            if (!calls.Any(IsConfigurationCall))
+            {
+                continue;
+            }
+
+            if (facts.ForTree(tree, "maps", () => ConfiguredMaps(compilation, tree)) is not { } configured)
+            {
+                foreach (var call in calls)
+                {
+                    if (IsConfigurationCall(call))
+                    {
+                        index.Unnamed.Add(index.Calls.Count);
+                        index.Calls.Add((tree, call));
+                    }
+                }
+
+                continue;
+            }
+
+            foreach (var (position, map) in configured)
+            {
+                if (!index.Named.TryGetValue(map, out var positions))
+                {
+                    positions = [];
+                    index.Named[map] = positions;
+                }
+
+                positions.Add(index.Calls.Count);
+                index.Calls.Add((tree, calls[position]));
+            }
+        }
+
+        return index;
+    }
+
+    /// <summary>
+    /// Which map each configuration call of a file configures, with the call's position among the file's indexed calls;
+    /// null when one cannot be named (a map between type parameters), and then every call of the file is bound for each map.
+    /// </summary>
+    /// <param name="compilation">The compilation.</param>
+    /// <param name="tree">The file.</param>
+    private static (int Call, MapKey Map)[]? ConfiguredMaps(Compilation compilation, SyntaxTree tree)
+    {
+        var calls = SyntaxIndex.Of(tree).Calls;
+        var maps = new List<(int, MapKey)>();
+#pragma warning disable RS1030 // Mapping profiles live in other files than the mapping calls; each file is read once for unchanged declarations.
+        var model = compilation.GetSemanticModel(tree);
+#pragma warning restore RS1030
+        for (var i = 0; i < calls.Length; i++)
+        {
+            if (!IsConfigurationCall(calls[i]) || Configuration(model, calls[i]) is not var (_, expression, library))
+            {
+                continue;
+            }
+
+            if (TypeName.Of(compilation, expression.TypeArguments[0]) is not { } source || TypeName.Of(compilation, expression.TypeArguments[1]) is not { } destination)
+            {
+                return null;
+            }
+
+            maps.Add((i, new MapKey(library, source, destination)));
+        }
+
+        return [.. maps];
+    }
+
+    /// <summary>Whether a call is named like a map configuration: <c>CreateMap</c>, <c>NewConfig</c> or <c>ForType</c>.</summary>
+    /// <param name="call">An indexed call.</param>
+    private static bool IsConfigurationCall(InvocationExpressionSyntax call)
+        => SyntaxIndex.CalledName(call) is "CreateMap" or "NewConfig" or "ForType";
+
+    /// <summary>A configuration call bound: the call, the expression type it returns and its library; null when it configures no map.</summary>
+    /// <param name="model">The file's semantic model.</param>
+    /// <param name="call">A call named like a configuration.</param>
+    private static (IInvocationOperation Configuration, INamedTypeSymbol Expression, MapperLibrary Library)? Configuration(SemanticModel model, InvocationExpressionSyntax call)
+        => model.GetOperation(call) is IInvocationOperation { Type: INamedTypeSymbol { TypeArguments.Length: 2 } expression } configuration
+           && MapOf(configuration, expression) is { } library
+            ? (configuration, expression, library)
+            : null;
+
+    /// <summary>A map by name.</summary>
+    /// <param name="Library">The library.</param>
+    /// <param name="Source">The source type.</param>
+    /// <param name="Destination">The destination type.</param>
+    private sealed record MapKey(MapperLibrary Library, TypeName Source, TypeName Destination);
+
+    /// <summary>Where the compilation's configuration calls are.</summary>
+    /// <param name="Calls">Every configuration call, with its file, in file order.</param>
+    /// <param name="Named">For each map, the positions in <paramref name="Calls"/> of the calls configuring it.</param>
+    /// <param name="Unnamed">The positions in <paramref name="Calls"/> of the calls in files whose maps could not be named, read for every map.</param>
+    private sealed record MapIndex(List<(SyntaxTree Tree, InvocationExpressionSyntax Call)> Calls, Dictionary<MapKey, List<int>> Named, List<int> Unnamed);
 
     /// <summary>
     /// Which library's map a configuration call starts: AutoMapper's <c>CreateMap</c> returning

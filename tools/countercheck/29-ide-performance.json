@@ -1,0 +1,80 @@
+[
+  {
+    "name": "The declarations hash covers the declarations (an added DbSet, a moved base list)",
+    "file": "src/NPlusOne.Analyzers/Model/SyntaxIndex.cs",
+    "old": "                     _ => true,",
+    "new": "                     _ => false,"
+  },
+  {
+    "name": "The declarations hash covers constants, which other files bind to",
+    "file": "src/NPlusOne.Analyzers/Model/SyntaxIndex.cs",
+    "old": "=> field.Modifiers.Any(SyntaxKind.ConstKeyword),",
+    "new": "=> field.Modifiers.Any(SyntaxKind.None),"
+  },
+  {
+    "name": "Facts are shared only with the very same referenced assemblies",
+    "file": "src/NPlusOne.Analyzers/Model/DeclarationFacts.cs",
+    "old": "if (!references[i].TryGetTarget(out var reference) || !ReferenceEquals(reference, otherReferences[i]))",
+    "new": "if (!references[i].TryGetTarget(out _))"
+  },
+  {
+    "name": "A partial type's base list may be on any part",
+    "file": "src/NPlusOne.Analyzers/Model/Symbols.cs",
+    "old": "        foreach (var reference in references)\n        {\n            if (reference.GetSyntax() is not BaseTypeDeclarationSyntax { BaseList: null })",
+    "new": "        foreach (var reference in references.RemoveRange(1, references.Length - 1))\n        {\n            if (reference.GetSyntax() is not BaseTypeDeclarationSyntax { BaseList: null })"
+  },
+  {
+    "name": "A partial type's override may be on any part",
+    "file": "src/NPlusOne.Analyzers/Model/Symbols.cs",
+    "old": "        foreach (var reference in references)\n        {\n            if (reference.GetSyntax() is not TypeDeclarationSyntax declaration)",
+    "new": "        foreach (var reference in references.RemoveRange(1, references.Length - 1))\n        {\n            if (reference.GetSyntax() is not TypeDeclarationSyntax declaration)"
+  },
+  {
+    "name": "Nested types are source types too",
+    "file": "src/NPlusOne.Analyzers/Model/Symbols.cs",
+    "old": "                yield return type;\n                stack.Push(type);",
+    "new": "                yield return type;"
+  },
+  {
+    "name": "The interface map records each implementer",
+    "file": "src/NPlusOne.Analyzers/Model/DeclarationFacts.cs",
+    "old": "                    if (positions.Count == 0 || positions[positions.Count - 1] != i)\n                    {\n                        positions.Add(i);\n                    }",
+    "new": ""
+  },
+  {
+    "name": "Mediator handlers include notification handlers",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "\"IStreamRequestHandler\", \"INotificationHandler\", \"IPipelineBehavior\");",
+    "new": "\"IStreamRequestHandler\", \"IPipelineBehavior\");"
+  },
+  {
+    "name": "A file that names a pipeline behavior keeps its typeof expressions",
+    "file": "src/NPlusOne.Analyzers/Model/SyntaxIndex.cs",
+    "old": "namesBehavior ? behaviorTypes.ToImmutable()",
+    "new": "namesBehavior && behaviorTypes.Count < 0 ? behaviorTypes.ToImmutable()"
+  },
+  {
+    "name": "A file that maps an endpoint keeps its Map* calls",
+    "file": "src/NPlusOne.Analyzers/Model/SyntaxIndex.cs",
+    "old": "mapsEndpoints ? mappings.ToImmutable()",
+    "new": "mapsEndpoints && mappings.Count < 0 ? mappings.ToImmutable()"
+  },
+  {
+    "name": "The index keeps AutoInclude calls",
+    "file": "src/NPlusOne.Analyzers/Model/SyntaxIndex.cs",
+    "old": "\"AddNewtonsoftJson\", \"AutoInclude\", \"CreateMap\"",
+    "new": "\"AddNewtonsoftJson\", \"CreateMap\""
+  },
+  {
+    "name": "The index keeps AddNewtonsoftJson calls",
+    "file": "src/NPlusOne.Analyzers/Model/SyntaxIndex.cs",
+    "old": "StringComparer.Ordinal, \"AddNewtonsoftJson\", \"AutoInclude\"",
+    "new": "StringComparer.Ordinal, \"AutoInclude\""
+  },
+  {
+    "name": "A map's configuration calls are read",
+    "file": "src/NPlusOne.Analyzers/Analysis/Mappings.cs",
+    "old": "                positions.AddRange(named);",
+    "new": "                positions.AddRange(named.Take(0));"
+  }
+]

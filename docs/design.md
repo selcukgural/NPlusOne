@@ -179,6 +179,29 @@ location, so the fix works when the query is in a repository in another file), a
 `NPlusOne.Analyzers.CodeFixes`, so the compiler never loads the Workspaces layer; both assemblies ship
 in the `NPlusOne.Analyzers` package.
 
+### Cost in the IDE
+
+An IDE makes a new compilation on every keystroke and analyses the open document in it, so anything the analyzer
+learns about the whole compilation would be learned again per keystroke. Three things keep that cheap:
+
+- **One walk per file.** The scans that need other files (endpoint mappings, pipeline behavior registrations,
+  `AddNewtonsoftJson`, mapper configurations, `AutoInclude`) read a `SyntaxIndex` built once per syntax tree and kept
+  with it: the nodes each scan binds, and a hash of the file's declarations. An IDE keeps the trees of the files that
+  did not change, so after an edit only the edited file is walked again, and no scan reads a file's text.
+- **The syntax first.** A type without a base list cannot implement an interface or derive from a context, and one
+  that declares no `override` cannot be what a virtual call runs; a property of a built-in type is never a navigation.
+  These are ruled out before the compiler is asked to resolve base types or signatures.
+- **Declarations are kept.** The entity types, the implementers of each interface and the mediator handlers depend
+  only on declarations and references, and which navigations an `AutoInclude` names or which map a `CreateMap`
+  configures depends only on that file besides. `DeclarationFacts` keeps these by name (assembly position and metadata
+  name, never symbols) for the next compilation with the same declarations hash (every token outside bodies and
+  property and field initializers, constants included) and the very same referenced assemblies, so typing in a method
+  body finds them by name. Any other edit, or a changed reference, computes them again.
+
+`PerformanceTests` (`NPLUSONE_BENCH=<modules>`) generates an application and times one document's analysis after a
+keystroke; `IncrementalTests` edit one file at a time and check that an edit that changes the answer is never
+answered from the previous compilation.
+
 ### Configuration
 
 All keys live in `.editorconfig` or `.globalconfig`:
