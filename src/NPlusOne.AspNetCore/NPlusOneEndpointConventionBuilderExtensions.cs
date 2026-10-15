@@ -10,7 +10,8 @@ public static class NPlusOneEndpointConventionBuilderExtensions
     /// <summary>
     /// Fails the endpoint (or every endpoint of a route group) with <see cref="NPlusOneViolationException"/>
     /// when its handler runs a query or a lazy load once per element. The check runs right after the
-    /// handler and before its result is written, like <see cref="NPlusOneAssertAttribute"/> for MVC.
+    /// handler and before its result is written, like <see cref="NPlusOneAssertAttribute"/> for MVC, and in the
+    /// Production environment logs a warning instead unless <see cref="NPlusOneOptions.AssertThrowsInProduction"/> is set.
     /// Applies to route handlers (<c>MapGet(pattern, delegate)</c> and friends), which support
     /// endpoint filters.
     /// </summary>

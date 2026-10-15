@@ -33,6 +33,15 @@ public sealed class NPlusOneOptions
     public bool ThrowOnViolation { get; set; }
 
     /// <summary>
+    /// Whether the ASP.NET Core assert filters (<c>[NPlusOneAssert]</c> and <c>WithNPlusOneAssert()</c>) throw
+    /// <see cref="NPlusOneViolationException"/> in the Production environment too. Default <see langword="false"/>:
+    /// in Production they log the report as a warning instead, because whether an endpoint repeats a query depends on
+    /// the data, and an assert left on an endpoint would let anyone who can add rows turn it into an error page for
+    /// every caller. In every other environment (Development, Testing, Staging) they always throw.
+    /// </summary>
+    public bool AssertThrowsInProduction { get; set; }
+
+    /// <summary>
     /// Commands whose SQL text matches any of these patterns are not recorded. The patterns run
     /// against the SQL as EF Core sends it, so a pattern can name a table or a tag.
     /// </summary>

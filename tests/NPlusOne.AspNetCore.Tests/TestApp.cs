@@ -32,7 +32,7 @@ public sealed class TestApp : IAsyncDisposable
 
     public CapturedLogs Logs { get; }
 
-    public static async Task<TestApp> StartAsync(Action<NPlusOneOptions>? configure = null, bool useMiddleware = true)
+    public static async Task<TestApp> StartAsync(Action<NPlusOneOptions>? configure = null, bool useMiddleware = true, string environment = "Testing")
     {
         var connectionString = $"Data Source=aspnet-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
         var keepAlive = new SqliteConnection(connectionString);
@@ -40,7 +40,7 @@ public sealed class TestApp : IAsyncDisposable
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
-            EnvironmentName = "Testing",
+            EnvironmentName = environment,
             ApplicationName = typeof(TestApp).Assembly.GetName().Name,
         });
         builder.WebHost.UseTestServer();

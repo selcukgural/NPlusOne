@@ -32,6 +32,14 @@
   ending in a backslash on SQL Server, SQLite or Oracle, and a double-quoted string on MySQL or SQL Server, are now
   hidden like any other literal, and SQL Server's and SQLite's `LIKE ... ESCAPE '\'` no longer hides the rest of the
   query.
+- New option `AssertThrowsInProduction` (default `false`), read by the ASP.NET Core assert filters.
+
+**`NPlusOne.AspNetCore`**
+
+- `[NPlusOneAssert]` and `.WithNPlusOneAssert()` no longer throw in the Production environment: they log the report as
+  a warning (event `NPlusOneAssertInProduction`) and the request succeeds, so an assert left on an endpoint cannot let
+  its data turn it into an error page. Every other environment (Development, Testing, Staging) still fails the
+  request; `AssertThrowsInProduction = true` restores throwing in Production.
 
 ## 1.0.0
 

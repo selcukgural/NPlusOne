@@ -7,9 +7,9 @@ namespace NPlusOne.AspNetCore;
 /// Fails an MVC action (or every action of a controller) with <see cref="NPlusOneViolationException"/>
 /// when it runs a query or a lazy load once per element. The check runs right after the action and
 /// before its result is written, so the exception still becomes an error response. Meant for
-/// integration tests and development; it always throws, regardless of
-/// <see cref="NPlusOneOptions.ThrowOnViolation"/>, and uses the other options registered with
-/// <see cref="NPlusOneServiceCollectionExtensions.AddNPlusOneGuard"/>.
+/// integration tests and development; it throws regardless of <see cref="NPlusOneOptions.ThrowOnViolation"/>, except in
+/// the Production environment, where it logs a warning unless <see cref="NPlusOneOptions.AssertThrowsInProduction"/>
+/// is set. It uses the other options registered with <see cref="NPlusOneServiceCollectionExtensions.AddNPlusOneGuard"/>.
 /// </summary>
 /// <remarks>
 /// Work done while the result is written (for example lazy loads triggered by the JSON serializer)
@@ -18,11 +18,11 @@ namespace NPlusOne.AspNetCore;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false)]
 public sealed class NPlusOneAssertAttribute : Attribute, IAsyncActionFilter
 {
-    /// <summary>Runs the action inside its own scope and throws if the scope has suspects.</summary>
+    /// <summary>Runs the action inside its own scope and throws (or, in Production, logs) if the scope has suspects.</summary>
     /// <param name="context">The action context.</param>
     /// <param name="next">Runs the action.</param>
     /// <returns>A task that completes after the action and the check.</returns>
-    /// <exception cref="NPlusOneViolationException">The action ran repeated queries or lazy loads.</exception>
+    /// <exception cref="NPlusOneViolationException">The action ran repeated queries or lazy loads, outside Production.</exception>
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -42,9 +42,6 @@ public sealed class NPlusOneAssertAttribute : Attribute, IAsyncActionFilter
             return;
         }
 
-        if (report.HasSuspects)
-        {
-            throw new NPlusOneViolationException(report);
-        }
+        RequestScope.Check(context.HttpContext, report);
     }
 }

@@ -57,4 +57,59 @@ public sealed class AssertFilterTests
         (await app.Client.GetAsync("/asserted/loop")).EnsureSuccessStatusCode();
         (await app.Client.GetAsync("/mvc/loop")).EnsureSuccessStatusCode();
     }
+
+    // An assert left on an endpoint must not turn data into an outage: in Production it reports instead of failing.
+    [Theory]
+    [InlineData("/mvc/loop")]
+    [InlineData("/asserted/loop")]
+    public async Task Filters_log_instead_of_throwing_in_production(string path)
+    {
+        await using var app = await TestApp.StartAsync(useMiddleware: false, environment: "Production");
+
+        var response = await app.Client.GetAsync(path);
+
+        Assert.Equal("10", await response.Content.ReadAsStringAsync());
+        var entry = Assert.Single(app.Logs.Guard);
+        Assert.Equal("NPlusOneAssertInProduction", entry.EventName);
+        Assert.Equal(Microsoft.Extensions.Logging.LogLevel.Warning, entry.Level);
+        Assert.Contains("Query ran 5 times at ShopContext.CountOrdersOneByOneAsync", entry.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("/mvc/loop")]
+    [InlineData("/asserted/loop")]
+    public async Task Filters_throw_in_production_when_asked(string path)
+    {
+        await using var app = await TestApp.StartAsync(o => o.AssertThrowsInProduction = true, useMiddleware: false, environment: "Production");
+
+        await Assert.ThrowsAsync<NPlusOneViolationException>(() => app.Client.GetAsync(path));
+    }
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Staging")]
+    public async Task Filters_throw_outside_production(string environment)
+    {
+        await using var app = await TestApp.StartAsync(useMiddleware: false, environment: environment);
+
+        await AssertFailsAsync(app.Client, "/mvc/loop");
+        await AssertFailsAsync(app.Client, "/asserted/loop");
+    }
+
+    // In Development the host adds the developer exception page, which turns the exception into a 500 that names it.
+    private static async Task AssertFailsAsync(HttpClient client, string path)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await client.GetAsync(path);
+        }
+        catch (NPlusOneViolationException)
+        {
+            return;
+        }
+
+        Assert.Equal(System.Net.HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Contains(nameof(NPlusOneViolationException), await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+    }
 }

@@ -49,7 +49,7 @@ internal sealed class NPlusOneGuardMiddleware(RequestDelegate next, IOptions<NPl
             return;
         }
 
-        var endpoint = EndpointName(context);
+        var endpoint = RequestScope.EndpointName(context);
         if (!settings.ThrowOnViolation)
         {
             NPlusOneLog.SuspectsFound(logger, context.Request.Method, endpoint, report);
@@ -64,12 +64,4 @@ internal sealed class NPlusOneGuardMiddleware(RequestDelegate next, IOptions<NPl
 
         throw new NPlusOneViolationException(report);
     }
-
-    /// <summary>
-    /// Names the endpoint by its display name (route template or action), never by the request path,
-    /// so identifiers and other values in the URL do not reach the log.
-    /// </summary>
-    /// <param name="context">The request.</param>
-    /// <returns>The endpoint name, or a placeholder when no endpoint matched.</returns>
-    private static string EndpointName(HttpContext context) => context.GetEndpoint()?.DisplayName ?? "(no endpoint)";
 }

@@ -46,7 +46,9 @@ public async Task Checkout_does_not_query_per_line()
 ```
 
 For tests that go through HTTP (`WebApplicationFactory`), add `[NPlusOneAssert]` to the controllers or
-`.WithNPlusOneAssert()` to the endpoint groups under test: the request fails with the report when an N+1 happens.
+`.WithNPlusOneAssert()` to the endpoint groups under test: the request fails with the report when an N+1 happens. The
+filters fail requests in every environment but Production, where they only log a warning, so leaving them on an
+endpoint cannot let the data take it down.
 
 ## GitHub Actions
 

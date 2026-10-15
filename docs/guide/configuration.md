@@ -54,6 +54,7 @@ Passed to `NPlusOneGuard.Begin(o => ...)` for a manual scope, or to `AddNPlusOne
 | `IgnoredSqlPatterns` | empty | Regular expressions; commands whose SQL matches are not recorded. |
 | `CaptureCallSite` | `true` | Group by call site as well as SQL, and show where to look. |
 | `ThrowOnViolation` | `false` | ASP.NET Core middleware: throw instead of logging, while the response has not started. |
+| `AssertThrowsInProduction` | `false` | ASP.NET Core assert filters: throw in the Production environment too, instead of logging a warning. |
 | `MaxSqlPreviewLength` | `300` | Length of the normalized SQL shown in reports. |
 
 See [the runtime guard](../runtime.md) for how scopes nest, how work is grouped and what a report looks like.

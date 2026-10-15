@@ -366,6 +366,15 @@ assigned source is never read half-built by another thread. Counter-checks `tool
   (both sides per dialect; red before, 19 failures). Counter-check `tools/countercheck/32-fingerprint-dialects.json`
   (run with `--project tests/NPlusOne.EntityFrameworkCore.Tests --filter FullyQualifiedName~NPlusOne.EntityFrameworkCore.Tests`):
   all 10 parts red when undone.
+- ~~**Asserts in production.**~~ (done 2026-10-15) `[NPlusOneAssert]` and `.WithNPlusOneAssert()` always threw, and
+  the CI guide put them on controllers, so they shipped: whether an endpoint repeats a query depends on its data, and
+  anyone who could add rows could turn it into an error page for every caller. Now `RequestScope.Check` logs the
+  report as a warning in the Production environment (event `NPlusOneAssertInProduction`) unless
+  `NPlusOneOptions.AssertThrowsInProduction` is set; every other environment still throws, so tests that name their
+  environment `Testing` keep failing on an N+1. Tests: `AssertFilterTests` (Production logs, the option throws,
+  Development and Staging throw; red before, 2 failures). Counter-check `tools/countercheck/33-production-asserts.json`
+  (run with `--project tests/NPlusOne.AspNetCore.Tests --filter FullyQualifiedName~NPlusOne.AspNetCore.Tests`): all 6
+  parts red when undone.
 - **ABP samples.** Scanned 2026-10-13, see item 8: the scan found nothing because the analyzer could not see ABP code.
 - **GraphQL resolvers (catalogue C24).** Hot Chocolate type-extension resolvers taking `[Parent]` run once per parent
   without a DataLoader; see what the analyzer misses there and decide whether to follow them before Dapper and ADO.NET.

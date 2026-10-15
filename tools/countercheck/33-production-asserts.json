@@ -1,0 +1,38 @@
+[
+  {
+    "name": "In Production an assert logs instead of throwing",
+    "file": "src/NPlusOne.AspNetCore/RequestScope.cs",
+    "old": "|| !environment.IsProduction())",
+    "new": "|| !environment.IsProduction() || environment.IsProduction())"
+  },
+  {
+    "name": "AssertThrowsInProduction makes it throw there too",
+    "file": "src/NPlusOne.AspNetCore/RequestScope.cs",
+    "old": "if (Options(context).AssertThrowsInProduction || services.GetService<IHostEnvironment>() is not { } environment || !environment.IsProduction())",
+    "new": "if (services.GetService<IHostEnvironment>() is not { } environment || !environment.IsProduction())"
+  },
+  {
+    "name": "Every environment but Production still throws (Testing, Staging)",
+    "file": "src/NPlusOne.AspNetCore/RequestScope.cs",
+    "old": "|| !environment.IsProduction())",
+    "new": "|| environment.IsDevelopment())"
+  },
+  {
+    "name": "The report is logged in Production",
+    "file": "src/NPlusOne.AspNetCore/RequestScope.cs",
+    "old": "            NPlusOneLog.AssertInProduction(logger, context.Request.Method, EndpointName(context), report);",
+    "new": "            _ = logger;"
+  },
+  {
+    "name": "The MVC attribute goes through the check",
+    "file": "src/NPlusOne.AspNetCore/NPlusOneAssertAttribute.cs",
+    "old": "        RequestScope.Check(context.HttpContext, report);",
+    "new": "        if (report.HasSuspects)\n        {\n            throw new NPlusOneViolationException(report);\n        }"
+  },
+  {
+    "name": "The endpoint filter goes through the check",
+    "file": "src/NPlusOne.AspNetCore/RequestScope.cs",
+    "old": "        Check(context, report);\n        return result;",
+    "new": "        return report.HasSuspects ? throw new NPlusOneViolationException(report) : result;"
+  }
+]

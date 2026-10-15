@@ -95,8 +95,11 @@ fail.
 
 **Assert filters.** `[NPlusOneAssert]` and `.WithNPlusOneAssert()` run the action or handler in
 its own scope and check it right after it returns, before its result is written, so the
-exception still becomes an error response. They always throw, whatever `ThrowOnViolation` says,
-and use the other options registered with `AddNPlusOneGuard` (the defaults if it was not called).
+exception still becomes an error response. They throw whatever `ThrowOnViolation` says, in every environment but
+Production: there they log the report as a warning (event `NPlusOneAssertInProduction`) and let the request succeed,
+unless `AssertThrowsInProduction` is set. Whether an endpoint repeats a query depends on its data, so an assert that
+throws in production lets anyone who can add rows turn the endpoint into an error page for every caller. They use the
+other options registered with `AddNPlusOneGuard` (the defaults if it was not called).
 They work with or without the middleware. Work done while the result is written, such as lazy
 loads triggered by the JSON serializer, happens after their check; the middleware sees it. `[NPlusOneAssert]` is an MVC
 action filter: it does nothing on a Razor Pages page model, and `.WithNPlusOneAssert()` applies to minimal API endpoints
@@ -112,6 +115,7 @@ async-local read per command and return.
 |---|---|---|
 | `RepeatThreshold` | `2` | A group that runs **more** than this many times in one scope is a suspect. At least 1. |
 | `ThrowOnViolation` | `false` | Middleware throws instead of logging a warning (see above). Manual scopes ignore it; call `AssertNoNPlusOne()`. |
+| `AssertThrowsInProduction` | `false` | The assert filters throw in the Production environment too, instead of logging a warning (see above). |
 | `IgnoredSqlPatterns` | empty | `Regex`es matched against the SQL as EF Core sends it; matching commands are not recorded. |
 | `IncludeWrites` | `false` | Also record `SaveChanges`, `ExecuteUpdate`, `ExecuteDelete` and `ExecuteSql` commands and the transactions the code starts, so a `SaveChanges` or a `BeginTransaction` per element is reported. One `SaveChanges` call counts once, however many statements it sends (and the transaction it opens is part of it). |
 | `CaptureCallSite` | `true` | Group by call site as well as SQL, and show it. Off: group by SQL only, a little faster. |
