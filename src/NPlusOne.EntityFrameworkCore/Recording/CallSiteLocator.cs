@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace NPlusOne.EntityFrameworkCore.Recording;
 
@@ -15,6 +17,14 @@ internal static class CallSiteLocator
     /// Matched as whole segments, so <c>SystemsInc.Orders</c> is still application code.
     /// </summary>
     private static readonly string[] FrameworkNamespaces = ["System", "Microsoft", "Castle", "Npgsql", "Pomelo", "Oracle", "MySqlConnector", "EFCore"];
+
+    /// <summary>
+    /// The formatted call site of each code location seen so far: per method, by IL offset. Reading a frame's file and
+    /// line walks the stack again and reads the PDB, which costs more than the rest of the capture together, and a code
+    /// location always has the same file and line. Keyed weakly by the method, so a collectible assembly can still be
+    /// unloaded; the entries are bounded by the code locations that send commands.
+    /// </summary>
+    private static readonly ConditionalWeakTable<MethodBase, ConcurrentDictionary<int, string>> Sites = [];
 
     /// <summary>This assembly; its frames are never the call site.</summary>
     private static readonly Assembly GuardAssembly = typeof(CallSiteLocator).Assembly;
@@ -37,21 +47,34 @@ internal static class CallSiteLocator
     /// <returns>The call site, or <see langword="null"/> when no application frame is on the stack.</returns>
     public static string? Capture(Type? entityType)
     {
-        // Walking without file information is cheap; symbols are then read for the one frame we keep.
+        // Walking without file information is cheap; symbols are then read for the one frame we keep, once per location.
         var frames = new StackTrace(1, false).GetFrames();
         for (var index = 0; index < frames.Length; index++)
         {
-            var method = frames[index].GetMethod();
+            var frame = frames[index];
+            var method = frame.GetMethod();
             if (method?.DeclaringType is not { } type || IsFramework(type) || IsEntityAccessor(method, type, entityType))
             {
                 continue;
             }
 
-            // StackTrace(1) skipped this method; StackFrame(index + 1) counts it, so both point at the same frame.
+            var offset = frame.GetILOffset();
+            var lines = offset == StackFrame.OFFSET_UNKNOWN ? null : Sites.GetValue(method, static _ => new ConcurrentDictionary<int, string>());
+            if (lines is not null && lines.TryGetValue(offset, out var known))
+            {
+                return known;
+            }
+
+            // StackTrace(1) skipped this method; StackFrame(index + 1) counts it, so both point at the same frame. When
+            // they do not, the site is formatted without a line and not kept, so a later capture can still find it.
             var located = new StackFrame(index + 1, true);
-            return located.GetMethod() == method
-                ? Format(type, method, located.GetFileName(), located.GetFileLineNumber())
-                : Format(type, method, null, 0);
+            if (located.GetMethod() != method)
+            {
+                return Format(type, method, null, 0);
+            }
+
+            var site = Format(type, method, located.GetFileName(), located.GetFileLineNumber());
+            return lines is null ? site : lines.GetOrAdd(offset, site);
         }
 
         return null;

@@ -24,6 +24,30 @@ public sealed class CallSiteLocatorTests
     }
 
     [Fact]
+    public void Capture_reads_a_location_once()
+    {
+        var sites = new string?[2];
+        for (var i = 0; i < sites.Length; i++)
+        {
+            sites[i] = CallSiteLocator.Capture(null);
+        }
+
+        Assert.NotNull(sites[0]);
+        Assert.Same(sites[0], sites[1]);
+    }
+
+    [Fact]
+    public void Capture_tells_two_lines_of_one_method_apart()
+    {
+        var first = CallSiteLocator.Capture(null);
+        var second = CallSiteLocator.Capture(null);
+
+        Assert.Matches(@"\(CallSiteLocatorTests\.cs:\d+\)$", first);
+        Assert.Matches(@"\(CallSiteLocatorTests\.cs:\d+\)$", second);
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
     public async Task Capture_names_the_async_method_and_lambda_owner()
     {
         await Task.Yield();

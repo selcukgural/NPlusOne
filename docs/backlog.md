@@ -481,11 +481,16 @@ In the IDE, a declaration edit costs four times a body edit.
 
 ### Runtime guard
 
-- **R1. Call sites read once per site.** `CallSiteLocator.Capture` walks the stack without file information (cheap), then
-  builds a second `StackFrame(index + 1, true)`, which walks the stack again and reads the PDB, for every command and
-  lazy load. Cache the formatted call site by method and IL offset (`StackFrame.GetILOffset()`), and the framework verdict
-  per type, so the symbols are read once per site. The keys are code locations: a finite set; bound it anyway. Prototype:
-  ~1.7 µs and ~3 KB at 60 frames instead of ~36 µs and ~81 KB.
+- ~~**R1. Call sites read once per site.**~~ (done 2026-10-15) `CallSiteLocator.Capture` walked the stack without file
+  information, then built a second `StackFrame(index + 1, true)`, which walked the stack again and read the PDB, for
+  every command and lazy load. The formatted call site is now kept per method (a `ConditionalWeakTable`, so collectible
+  assemblies still unload) and IL offset; a frame without an offset, or one the second walk does not find, is not kept.
+  `CallSiteBenchmarks`, 10 / 60 frames: 13.7 / 36.2 µs and 24.6 / 81.3 KB before, 5.1 / 10.3 µs and 8.0 / 20.0 KB
+  after, the same as `new StackTrace(1, false).GetFrames()` alone, the floor of the public API (the benchmark harness
+  adds its own frames below). `GuardedRequestBenchmarks` with call sites: 10 queries 303 → 264 µs and 348 → 230 KB,
+  10 lazy loads 707 → 498 µs and 704 → 458 KB. Tests: `CallSiteLocatorTests` (one location read once, red before; two
+  lines of one method told apart). Counter-check `tools/countercheck/36-call-site-cache.json` (same `--project` and
+  `--filter` as 32): both parts red when undone.
 - **R2. Fingerprints cached by command text.** EF Core reuses one command text string per cached query, so the same
   string comes back for every element of an N+1. A `ConditionalWeakTable<string, …>` keyed by the string (with the
   dialect in the value) holds nothing beyond EF Core's own lifetime and keeps no text alive. Prototype: 0.16 µs and

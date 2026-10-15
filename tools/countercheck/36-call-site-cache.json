@@ -1,0 +1,14 @@
+[
+  {
+    "name": "A call site is kept per IL offset, not per method",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/CallSiteLocator.cs",
+    "old": "var offset = frame.GetILOffset();",
+    "new": "var offset = frame.GetILOffset() * 0;"
+  },
+  {
+    "name": "A call site read once is kept",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/CallSiteLocator.cs",
+    "old": "return lines is null ? site : lines.GetOrAdd(offset, site);",
+    "new": "return site;"
+  }
+]
