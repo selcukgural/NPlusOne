@@ -107,7 +107,12 @@ and groups, not to `MapControllers()` or `MapRazorPages()`; use the middleware t
 
 The guard is opt-in: enable the middleware where you want it (development, staging, a share of
 production traffic). With no scope active, the interceptor and the lazy-load listener cost one
-async-local read per command and return.
+async-local read per command and return. Inside a scope, a command is counted in a dictionary: its SQL is normalized
+once per command text (EF Core sends the same text for every run of a query), a context's provider is looked up once,
+and a scope that records nothing allocates a few hundred bytes. The call site is what costs: the stack is walked on
+every command and lazy load (a few microseconds; the file and line of each code location are read once). In
+`benchmarks/NPlusOne.Benchmarks`, a request with ten queries on SQLite took about 4% longer inside a scope, and about
+80% longer with call sites; `CaptureCallSite = false` leaves them out.
 
 ## Options
 

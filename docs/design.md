@@ -197,11 +197,18 @@ learns about the whole compilation would be learned again per keystroke. Three t
   configures depends only on that file besides. `DeclarationFacts` keeps these by name (assembly position and metadata
   name, never symbols) for the next compilation with the same declarations hash (every token outside bodies and
   property and field initializers, constants included) and the very same referenced assemblies, so typing in a method
-  body finds them by name. Any other edit, or a changed reference, computes them again.
+  body finds them by name. The entities and the interface map depend on less, the type shapes (the declarations without
+  methods, constructors and operators), and are shared by every compilation with the same shapes, so typing a method
+  signature keeps them too. Any other edit, or a changed reference, computes them again.
 
-`PerformanceTests` (`NPLUSONE_BENCH=<modules>`) generates an application and times one document's analysis after a
-keystroke; `IncrementalTests` edit one file at a time and check that an edit that changes the answer is never
-answered from the previous compilation.
+Within a document, the questions about a method's locals (where a local gets its value, which loop declares it,
+whether lazy loading is turned off before a read) are answered from one walk of the method (`OperationIndex`), call
+graph searches follow each method once per depth, and a message's text is built only when a diagnostic is reported.
+
+`benchmarks/NPlusOne.Benchmarks` measures the analysis of one document after a keystroke in a body and in a
+declaration, and of a whole compilation, in a generated application (`KeystrokeBenchmarks`, `BuildBenchmarks`), next
+to an analyzer that only subscribes to the same operations; `IncrementalTests` edit one file at a time and check that
+an edit that changes the answer is never answered from the previous compilation.
 
 ### Configuration
 
