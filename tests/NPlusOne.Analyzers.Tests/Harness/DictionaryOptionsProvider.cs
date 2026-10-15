@@ -9,10 +9,13 @@ public sealed class DictionaryOptionsProvider(IReadOnlyDictionary<string, string
 {
     private readonly DictionaryOptions _options = new(values);
 
+    /// <inheritdoc />
     public override AnalyzerConfigOptions GlobalOptions => _options;
 
+    /// <inheritdoc />
     public override AnalyzerConfigOptions GetOptions(SyntaxTree tree) => _options;
 
+    /// <inheritdoc />
     public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => _options;
 
     private sealed class DictionaryOptions(IReadOnlyDictionary<string, string> values) : AnalyzerConfigOptions

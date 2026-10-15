@@ -454,6 +454,130 @@ nothing was reported: only `context.Set<Author>().FindAsync(id)` in the EF Core 
   property getters are still taken as dispatched (`base.Price` as a method group is rare). Corpus: `Reads/CallChains.cs`
   (`StoredPrices`, `FixedCounts`, `PriceList`) and `Lazy/BaseCalls.cs`. Counter-check `tools/countercheck/31-base-calls.json`.
 
+## 9. CPU and memory (next)
+
+Reviewed on 2026-10-15 (the runtime guard, the analyzer's per-operation path, its compilation-wide models and the
+generator). The aim is less time and less garbage: fewer strings built only to be compared, spans instead of substrings,
+pooled buffers instead of fresh ones, work cached where it repeats, and nothing done that its result does not need.
+Every item runs the affected benchmarks of `benchmarks/NPlusOne.Benchmarks` before and after and records both in its
+entry; a change that does not move its benchmark is not kept. The usual rules still hold: the corpus, the ground truth and
+`IncrementalTests` stay green, and a cache gets a test showing that a changed input is not answered from it.
+
+Baseline (Apple M3 Max, .NET 10, BenchmarkDotNet in process, `5356bf3`):
+
+| Benchmark | Time | Allocated |
+|---|---:|---:|
+| Fingerprint of one command (short / joins / `IN` list) | 1.2 / 6.2 / 4.0 µs | 1.5 / 5.6 / 10.1 KB |
+| Call site of one record (10 / 60 frames deep) | 13.7 / 36.2 µs | 24.6 / 81.3 KB |
+| Empty scope (begin, report, dispose) | 0.17 µs | 1.25 KB |
+| Request with 10 queries: no scope / scope / scope with call sites | 128 / 162 / 303 µs | 123 / 148 / 348 KB |
+| Request with 10 lazy loads: no scope / scope / scope with call sites | 272 / 314 / 707 µs | 263 / 290 / 704 KB |
+| Keystroke in a body, 200 / 1,000 modules (floor 6.9 / 38.7 ms) | 23.9 / 99.4 ms | 11.0 / 44.8 MB |
+| Keystroke in a declaration, 200 / 1,000 modules | 64.9 / 389.6 ms | 34.4 / 162.0 MB |
+| Whole compilation, 200 / 1,000 modules | 0.74 / 3.69 s | 378 / 2,671 MB |
+
+With call sites on (the default), the guard more than doubles the time and nearly triples the allocations of a request.
+In the IDE, a declaration edit costs four times a body edit.
+
+### Runtime guard
+
+- **R1. Call sites read once per site.** `CallSiteLocator.Capture` walks the stack without file information (cheap), then
+  builds a second `StackFrame(index + 1, true)`, which walks the stack again and reads the PDB, for every command and
+  lazy load. Cache the formatted call site by method and IL offset (`StackFrame.GetILOffset()`), and the framework verdict
+  per type, so the symbols are read once per site. The keys are code locations: a finite set; bound it anyway. Prototype:
+  ~1.7 µs and ~3 KB at 60 frames instead of ~36 µs and ~81 KB.
+- **R2. Fingerprints cached by command text.** EF Core reuses one command text string per cached query, so the same
+  string comes back for every element of an N+1. A `ConditionalWeakTable<string, …>` keyed by the string (with the
+  dialect in the value) holds nothing beyond EF Core's own lifetime and keeps no text alive. Prototype: 0.16 µs and
+  nothing allocated on a hit.
+- **R3. One pass for the fingerprint.** A miss runs a left-to-right scan, a `StringBuilder`, then three regex
+  `Replace` passes, each a new string. Fold the value, `IN` list and whitespace steps into the scan: write into a pooled
+  `char` buffer (`ArrayPool<char>`), find runs with `SearchValues`, and make one string at the end. `SqlFingerprintTests`
+  guard the privacy promise; add cases for every regex branch before replacing it.
+- **R4. A cheaper scope.** Create the group dictionary on the first record, not at begin; keep the highest count so a
+  report without suspects allocates no list; skip `ScopeSettings` array copies when there are no ignored patterns. Target:
+  an empty scope under 300 B.
+- **R5. The dialect once per context.** `Database.ProviderName` resolves a service on every command, and it is computed
+  before any scope accepts the command. Compute it only when a scope records, cached per context options.
+- **R6. Lazy loads without strings.** `UsesGuard` looks up the options extension on every lazy load, and the
+  `Entity.Navigation` name is interpolated each time. Cache both, per options and per entity type and navigation.
+- **R7. Bounded groups.** A long scope (a background job, a long test) keeps every distinct fingerprint. Cap the groups and
+  count the overflow in the report.
+
+### Analyzer, per keystroke
+
+- **A1. Declaration edits keep the entity model.** `DeclarationFacts` is keyed by one hash of every declaration, so
+  typing a signature, a parameter or a `using` rebuilds entities (every type of every non-framework referenced assembly),
+  the interface map and every per-file answer. Key the entities and the interface map by a type-shape hash (namespaces,
+  usings, type headers, base lists, attributes, fields and properties), keep the full hash for the per-file answers, and
+  cache the facts of referenced assemblies per `IAssemblySymbol` in a `ConditionalWeakTable`. Scan for entity roots only
+  in assemblies that reference EF Core or ABP. `IncrementalTests` cases: a signature edit, an added property on an
+  entity, an edit in a referenced project. Target: a declaration keystroke close to a body keystroke.
+- **A2. Candidate types only on a miss.** `Implementers` and `MediatorTypes` read `_candidateTypes.Value` before asking
+  the cached interface map, so every interface or mediator call collects every candidate type. Pass it lazily; split the
+  implementing and overriding candidates.
+- **A3. Arguments traced only when used.** `OnInvocation` traces every argument of every call before it knows whether the
+  call is in a loop; outside a loop only a call to the method itself uses them. Trace them in the two branches that need
+  them, and find the method's direct query once per block.
+- **A4. One walk per method, and none without lazy loading.** `TraceLocal`, `SingleInitializer`, `AssignedValues`,
+  `LoopDeclaring`, `LazyLoadingTurnedOffBefore`, `LoadedExplicitlyBefore` and `RequestType` each walk the whole method on
+  every call, so large methods are quadratic. Build one index per root in one walk (declarators, assignments, the
+  `foreach` declaring each local, the first `LazyLoadingEnabled = false`, explicit loads). The lazy-load checks
+  (`CheckInstanceMember`, `CheckElementArgument`, `CheckSequenceArguments`, parts of `CheckMethodGroups` and
+  `CheckClientProjection`) can never report without lazy loading: return first when `AnyLazyLoading` is false.
+- **A5. Bounded call-graph searches.** `Session.Reaches` and `CollectNavigationReads` explore every path to the depth
+  limit with no visited set. Search breadth first with a visited set (a shorter path leaves more depth), and cache
+  `NavigationReadsOf`.
+- **A6. Expression-tree checks per lambda.** `Operations.IsExpressionTree` asks `GetTypeInfo` for every lambda above an
+  operation, every time; `SummaryBuilder.RunsWhenCalled` does it for every operation. Read the lambda's conversion type
+  (resolve `Expression<T>` once in `KnownSymbols`), memoise per lambda, and walk summaries top-down, skipping the
+  subtrees of expression trees and stored lambdas.
+- **A7. Messages built only when reported.** `IterationFinder.Find` builds the description of each loop (the collection's
+  syntax text, `Replace`, `Substring`, interpolation) for every call. Cache the iteration per region and build the text in
+  `Messages`, from spans of the syntax text.
+
+### Analyzer, allocations
+
+- **A8. Names compared without strings.** `Mappings.LibraryOf` calls `ToDisplayString()` per call with arguments,
+  `Symbols.FullName` builds with `Insert(0, ns + ".")` per call (twice in `IsOpaqueDataAccess`), and `NamePatterns` builds
+  `FullName + "." + Name` even when no pattern has a dot. Compare namespace parts against spans or against symbols resolved
+  once in `KnownSymbols`; check the method name first; build a full name only for a pattern that needs it, into a pooled
+  builder; `TypeName.Of` appends segments in order and looks up assembly indexes in a dictionary.
+- **A9. No allocation on cache hits.** Method groups passed to `GetOrAdd` allocate a delegate per call (`FindTargets`,
+  `CollectAssignedValues`, `NavigationsOf`): keep them in fields and try `TryGetValue` first. `WitnessKey` becomes a
+  `readonly record struct`. `LoadsLazily` stops splitting a string; `AsNavigation` is computed once per callback;
+  `OnBlockEnd` returns early with nothing collected. `SyntaxIndex.CallsTo` checks for no calls before making an iterator.
+- **A10. Pooled builders.** The per-operation paths build short-lived `ImmutableArray` builders, lists and sets.
+  A small pool (thread-static, as Roslyn's `ArrayBuilder`) where `BuildBenchmarks` shows them in the allocations;
+  netstandard2.0 has `ArrayPool` and spans through System.Memory, which Roslyn already brings, but not `string.Create`
+  or `SearchValues`.
+- **A11. Assigned values in one pass per type.** `CollectAssignedValues` walks the whole type once per member. Collect
+  every member in one walk, and match `EqualsValueClause` only on field and property declarations.
+
+### Analyzer, builds and long-lived processes
+
+- **A12. Whole-compilation scans kept by file.** `CollectEndpointHandlers`, `CallsAddNewtonsoftJson` and
+  `CollectRegisteredBehaviors` bind again on every compilation: keep their answers in `facts.ForTree` as names, and rule out
+  `Map*` calls whose arguments are all lambdas by syntax. `HasLazyLoaderEntity` rules out constructors by syntax first.
+- **A13. Referenced summaries parsed once per assembly.** `ReferencedSummaries.Read` decodes every attribute of every
+  referenced assembly per compilation (`ToDisplayString`, a key string per fact): cache per `IAssemblySymbol`.
+  `Covers` is `_complete.Contains` only: a lookup for a method of an incomplete assembly cannot succeed.
+- **A14. The generator.** It builds a second `Session` and summarises every non-private method, and its output changes the
+  declarations hash, so the analyzer misses the facts the generator just built. Leave the generated tree out of the
+  hash, emit only members visible outside the assembly (internal ones only with `InternalsVisibleTo`), and consider one
+  attribute per type instead of one per method. Add a generator benchmark first.
+- **A15. DeclarationFacts eviction.** Entries with dead weak references are never dropped, eviction is first-in and
+  `Clear()` at 64 names empties everything in large solutions. Drop dead entries, evict the least recently used, and
+  bound the total.
+
+### Research
+
+- **A16. Summaries across compilations.** The session is per compilation, so each keystroke rebuilds the summary of every
+  callee in unchanged files. `SummaryExport` already encodes summaries; keeping them by file needs to track the files
+  each summary consulted. Measure after A1–A6 before building it.
+
+Order: R1, R2 (the guard's cost in every scoped request), A2, A3, A4 (cheap, every keystroke), A1, then R3–R7 and A5–A15.
+
 ## Not planned: limits of static analysis
 
 - An implementation in a project the analyzing project does not reference, reflection and dynamic dispatch,

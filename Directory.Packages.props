@@ -90,6 +90,11 @@
     <PackageVersion Include="Volo.Abp.Autofac" Version="10.7.0" />
   </ItemGroup>
 
+  <!-- Measures the analyzer and the runtime guard (benchmarks/); never part of a published package. -->
+  <ItemGroup>
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />

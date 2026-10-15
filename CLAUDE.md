@@ -35,6 +35,11 @@ guard in tests and requests. MIT licensed, free for the community.
   are recorded in docs/backlog.md and docs/comparison.md.
 - `ComparisonTests` (`NPLUSONE_COMPARE=1`) scores other tools on the corpus next to this one: LinqContraband (static),
   and EFCore.QueryGuard, DbEye and MiniProfiler (runtime, through `IRuntimeDetector` in the ground-truth harness).
+- `benchmarks/NPlusOne.Benchmarks` (BenchmarkDotNet, net10.0, in process, time and allocations): the runtime guard
+  (`FingerprintBenchmarks`, `CallSiteBenchmarks`, `ScopeBenchmarks`, `GuardedRequestBenchmarks` on SQLite) and the analyzer
+  (`KeystrokeBenchmarks` for a body and a declaration edit, `BuildBenchmarks`) on the generated application of the analyzer
+  tests. `dotnet run -c Release --project benchmarks/NPlusOne.Benchmarks -- --filter '*Fingerprint*'`; run the affected
+  benchmarks before and after a performance change and put both numbers in the backlog entry.
 - `PerformanceTests` (`NPLUSONE_BENCH=<modules>`, Release, one framework) times one document's analysis after a keystroke
   in a generated application, next to an analyzer that only subscribes to the same operations. `IncrementalTests` edit
   one file at a time, as an IDE does, so what `DeclarationFacts` keeps across compilations never answers for a changed one.

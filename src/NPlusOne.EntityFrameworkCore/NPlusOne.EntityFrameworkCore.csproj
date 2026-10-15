@@ -12,5 +12,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="NPlusOne.EntityFrameworkCore.Tests" />
+    <InternalsVisibleTo Include="NPlusOne.Benchmarks" />
   </ItemGroup>
 </Project>

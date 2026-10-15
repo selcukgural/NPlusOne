@@ -96,4 +96,6 @@ review.
 - Use `static` lambdas when nothing is captured; `FrozenDictionary`/`FrozenSet` for static lookup
   tables where the target framework has them, `ImmutableDictionary`/`ImmutableHashSet` in the
   analyzer.
-- Measure before optimizing anything more than this; readability wins without numbers.
+- Measure before optimizing anything more than this; readability wins without numbers. `benchmarks/NPlusOne.Benchmarks`
+  measures time and allocations of the runtime guard's per-command paths and of the analyzer per keystroke and per build;
+  a performance change shows the affected benchmarks before and after.

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    BenchmarkDotNet measurements of the analyzer and the runtime guard: time and allocations per operation, before and
+    after a change. Runs in process on the newest target framework only (see Program.cs).
+    The analyzer benchmarks compile the generated application of the analyzer tests (Harness/LargeSolution.cs) against
+    the assemblies this process loads, so it references the libraries that application uses.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Proxies" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" />
+    <PackageReference Include="AutoMapper" />
+    <PackageReference Include="MediatR" />
+    <ProjectReference Include="../../src/NPlusOne.Analyzers/NPlusOne.Analyzers.csproj" />
+    <ProjectReference Include="../../src/NPlusOne.EntityFrameworkCore/NPlusOne.EntityFrameworkCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../tests/NPlusOne.Analyzers.Tests/Harness/LargeSolution.cs" Link="Analyzer/Harness/LargeSolution.cs" />
+    <Compile Include="../../tests/NPlusOne.Analyzers.Tests/Harness/TestCompilation.cs" Link="Analyzer/Harness/TestCompilation.cs" />
+    <Compile Include="../../tests/NPlusOne.Analyzers.Tests/Harness/DictionaryOptionsProvider.cs" Link="Analyzer/Harness/DictionaryOptionsProvider.cs" />
+  </ItemGroup>
+
+  <!--
+    AutoMapper 14 is the last MIT release; its advisory concerns mapping deeply nested objects at run time. Here it is
+    only a reference of the generated application, which is compiled and analysed, never run.
+  -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-rvv3-g6hj-g44x" />
+  </ItemGroup>
+</Project>
