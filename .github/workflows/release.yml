@@ -9,12 +9,15 @@ permissions:
   contents: read
 
 jobs:
-  # Builds, tests and packs with read-only permissions: restore and build run third-party code.
+  # Builds and packs with read-only permissions: restore and build run third-party code. The tests are not run again: the
+  # tagged commit must already have passed CI on main, which runs them all on every supported framework.
   pack:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     permissions:
       contents: read
+      # Reads the CI runs of the tagged commit.
+      actions: read
     env:
       CI: 'true'
       DOTNET_NOLOGO: 'true'
@@ -49,14 +52,24 @@ jobs:
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
 
+      # The tests ran in CI for this very commit when it reached main; a tag on a commit whose CI failed, or has not
+      # finished, publishes nothing. Tag after CI is green.
+      - name: CI passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&status=success" --jq '.total_count')
+          if [ "$passed" -eq 0 ]; then
+            echo "::error::CI has not passed on $SHA. Tag a commit on main after its CI run is green."
+            exit 1
+          fi
+
       - name: Restore
         run: dotnet restore
 
       - name: Build
         run: dotnet build --no-restore -c Release -p:Version="$VERSION"
-
-      - name: Test
-        run: dotnet test --no-build -c Release
 
       - name: Pack
         run: dotnet pack --no-build -c Release -p:Version="$VERSION" -o artifacts
