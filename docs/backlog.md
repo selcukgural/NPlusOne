@@ -502,10 +502,16 @@ In the IDE, a declaration edit costs four times a body edit.
   `SqlFingerprintTests` (a text sent again, a text in another dialect, a scope records the kept fingerprint).
   Counter-check `tools/countercheck/37-fingerprint-cache.json` (same `--project` and `--filter` as 32): all 3 parts red
   when undone.
-- **R3. One pass for the fingerprint.** A miss runs a left-to-right scan, a `StringBuilder`, then three regex
-  `Replace` passes, each a new string. Fold the value, `IN` list and whitespace steps into the scan: write into a pooled
-  `char` buffer (`ArrayPool<char>`), find runs with `SearchValues`, and make one string at the end. `SqlFingerprintTests`
-  guard the privacy promise; add cases for every regex branch before replacing it.
+- ~~**R3. Pooled buffers for the fingerprint.**~~ (done 2026-10-15) A command text the guard has not seen ran a scan into a
+  `StringBuilder`, then three regex `Replace` passes, each a new string. Each step now writes into one of two pooled
+  `char` buffers (the values and the `IN` lists through `Regex.EnumerateMatches` on spans, whitespace by hand), and only
+  the result is a string; the buffers go back to the pool cleared, since they held the command's values. The regexes are
+  the same, so what is hidden is the same. `FingerprintBenchmarks.Create` (short / joins / `IN` list / backslash):
+  1.08 / 5.97 / 3.78 / 1.31 µs and 1,504 / 5,616 / 10,065 / 664 B before, 0.63 / 4.42 / 1.90 / 1.09 µs and
+  176 / 1,160 / 216 / 184 B after. Tests: `SqlFingerprintTests` (5,000 generated commands without strings or comments,
+  each compared with the three regex replacements in every dialect). Counter-check
+  `tools/countercheck/41-fingerprint-buffers.json` (`--project tests/NPlusOne.EntityFrameworkCore.Tests --filter
+  FullyQualifiedName~SqlFingerprintTests`): all 5 parts red when undone.
 - ~~**R4. A cheaper scope.**~~ (done 2026-10-15) The groups were a `ConcurrentDictionary` created at begin (buckets and a
   lock per processor) with a boxed counter per group; they are now a `Dictionary` created on the first record, counted
   under a lock with one lookup (`CollectionsMarshal.GetValueRefOrAddDefault`). A report without suspects shares the empty

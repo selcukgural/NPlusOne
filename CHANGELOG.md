@@ -44,7 +44,8 @@
 - Call sites cost less: the file and line of a code location are read once, not on every command and lazy load. A
   request with ten queries inside a scope allocates about a third less, and runs about an eighth faster.
 - The SQL of a command is normalized once per command text, not on every run: EF Core sends the same text for every
-  element of an N+1. Without call sites, a scope now adds a few percent to a request's time.
+  element of an N+1. Without call sites, a scope now adds a few percent to a request's time. Normalizing a new text
+  works in pooled buffers and allocates only the result.
 - A scope allocates a fifth of what it did (272 bytes when nothing is recorded), and the provider's dialect and the
   lazy-loaded navigation names are worked out once per context and per navigation instead of on every command.
 - New option `AssertThrowsInProduction` (default `false`), read by the ASP.NET Core assert filters.

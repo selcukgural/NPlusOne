@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using NPlusOne.EntityFrameworkCore.Recording;
 
 namespace NPlusOne.EntityFrameworkCore.Tests;
@@ -24,6 +25,54 @@ public sealed class SqlFingerprintTests
         {
             Assert.Equal(expected, SqlFingerprint.Create(sql, dialect));
         }
+    }
+
+    // The value, IN list and whitespace steps once ran as three regex replacements; they now write into pooled buffers.
+    // Text without strings or comments, where the first step changes nothing, must come out as the replacements made it.
+    [Fact]
+    public void Values_in_lists_and_whitespace_come_out_as_the_regex_replacements_made_them()
+    {
+        string[] tokens =
+        [
+            "SELECT", "IN", "in", "In", "(", ")", ",", "@p0", "@__id_1", ":name", "$1", "@@ROWCOUNT", "x::int", "42", "3.14",
+            "1e-5", "2E+10", ".5", "0x1F", "0X0", "550e8400-e29b-41d4-a716-446655440000", "NULL", "null", "-1", "abc",
+            "a_1", "t.col", "Id2", "e5", "?", "@p", "-?",
+        ];
+        string[] separators = ["", " ", "  ", "\t", "\n", "\r\n", "\u00A0", ", "];
+        var random = new Random(20261015);
+        for (var run = 0; run < 5000; run++)
+        {
+            var text = new System.Text.StringBuilder();
+            var count = random.Next(1, 16);
+            for (var i = 0; i < count; i++)
+            {
+                text.Append(separators[random.Next(separators.Length)]).Append(tokens[random.Next(tokens.Length)]);
+            }
+
+            var sql = text.Append(separators[random.Next(separators.Length)]).ToString();
+            var expected = ByRegexReplacements(sql);
+            foreach (var dialect in Enum.GetValues<SqlDialect>())
+            {
+                Assert.True(expected == SqlFingerprint.Create(sql, dialect), $"{dialect}: '{sql}'");
+            }
+        }
+    }
+
+    private static string ByRegexReplacements(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return "(empty)";
+        }
+
+        var text = Regex.Replace(
+            sql,
+            """(?<![\w@:$])(?:(?<param>[@:$]\w+)|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|0[xX][0-9a-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|\.\d+)(?!\w)""",
+            static match => match.Groups["param"].Success ? "@p" : "?",
+            RegexOptions.CultureInvariant);
+        text = Regex.Replace(text, """\bIN\s*\(\s*(?:@p|-?\?|NULL)(?:\s*,\s*(?:@p|-?\?|NULL))*\s*\)""", "IN (?)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        text = Regex.Replace(text, """\s+""", " ", RegexOptions.CultureInvariant).Trim();
+        return text.Length == 0 ? "(empty)" : text;
     }
 
     [Fact]

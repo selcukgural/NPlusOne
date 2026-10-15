@@ -1,0 +1,32 @@
+[
+  {
+    "name": "A parameter becomes @p",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "var replacement = text[match.Index] is '@' or ':' or '$' ? \"@p\" : \"?\";",
+    "new": "var replacement = text[match.Index] is '@' ? \"@p\" : \"?\";"
+  },
+  {
+    "name": "An IN list collapses",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "        const string InList = \"IN (?)\";",
+    "new": "        const string InList = \"IN(?)\";"
+  },
+  {
+    "name": "Text after the last match is kept",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "        text[copied..].CopyTo(output[written..]);\n        return written + text.Length - copied;\n    }\n\n    /// <summary>Collapses every",
+    "new": "        return written;\n    }\n\n    /// <summary>Collapses every"
+  },
+  {
+    "name": "Leading whitespace is dropped",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "pendingSpace = written > 0;",
+    "new": "pendingSpace = true;"
+  },
+  {
+    "name": "Whitespace runs collapse to one space",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "            if (char.IsWhiteSpace(c))\n            {\n                pendingSpace = written > 0;\n                continue;\n            }",
+    "new": "            if (c == ' ')\n            {\n                pendingSpace = written > 0;\n                continue;\n            }"
+  }
+]

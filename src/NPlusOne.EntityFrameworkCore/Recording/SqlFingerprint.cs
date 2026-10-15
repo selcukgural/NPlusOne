@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace NPlusOne.EntityFrameworkCore.Recording;
@@ -88,11 +87,26 @@ internal static partial class SqlFingerprint
             return Empty;
         }
 
-        var text = RemoveStringsAndComments(sql, dialect);
-        text = ValueRegex().Replace(text, static match => match.Groups["param"].Success ? "@p" : "?");
-        text = InListRegex().Replace(text, "IN (?)");
-        text = WhitespaceRegex().Replace(text, " ").Trim();
-        return text.Length == 0 ? Empty : text;
+        // Each step writes into a pooled buffer and the next reads it, so a fingerprint allocates only its result. Two
+        // buffers take turns; an IN list can grow by one character ("IN(?)" becomes "IN (?)"), so they have room for it.
+        var capacity = sql.Length + (sql.Length / 5) + 8;
+        var marks = ArrayPool<byte>.Shared.Rent(sql.Length);
+        var first = ArrayPool<char>.Shared.Rent(capacity);
+        var second = ArrayPool<char>.Shared.Rent(capacity);
+        try
+        {
+            var length = RemoveStringsAndComments(sql, dialect, marks, first);
+            length = ReplaceValues(first.AsSpan(0, length), second);
+            length = ReplaceInLists(second.AsSpan(0, length), first);
+            return CollapseWhitespace(first.AsSpan(0, length), second) is var collapsed and > 0 ? new string(second, 0, collapsed) : Empty;
+        }
+        finally
+        {
+            // The buffers held the command's text, values included: they go back to the shared pool cleared.
+            ArrayPool<byte>.Shared.Return(marks);
+            ArrayPool<char>.Shared.Return(first, clearArray: true);
+            ArrayPool<char>.Shared.Return(second, clearArray: true);
+        }
     }
 
     /// <summary>
@@ -140,27 +154,96 @@ internal static partial class SqlFingerprint
     /// </summary>
     /// <param name="sql">The command text.</param>
     /// <param name="dialect">The dialect of the command.</param>
-    private static string RemoveStringsAndComments(string sql, SqlDialect dialect)
+    /// <param name="marks">A buffer of at least one mark per character.</param>
+    /// <param name="output">Where the text is written; at least as long as <paramref name="sql"/>.</param>
+    /// <returns>The length written.</returns>
+    private static int RemoveStringsAndComments(string sql, SqlDialect dialect, byte[] marks, char[] output)
     {
-        var marks = ArrayPool<byte>.Shared.Rent(sql.Length);
-        try
-        {
-            Array.Clear(marks, 0, sql.Length);
-            var doubleQuotedNames = dialect is SqlDialect.PostgreSql or SqlDialect.Sqlite or SqlDialect.Oracle;
+        Array.Clear(marks, 0, sql.Length);
+        var doubleQuotedNames = dialect is SqlDialect.PostgreSql or SqlDialect.Sqlite or SqlDialect.Oracle;
 
-            // The readings differ only in what a backslash does: without one, they all find the same runs.
-            var readings = sql.Contains('\\', StringComparison.Ordinal) ? Readings(dialect) : NeverEscapes;
-            foreach (var reading in readings)
+        // The readings differ only in what a backslash does: without one, they all find the same runs.
+        var readings = sql.Contains('\\', StringComparison.Ordinal) ? Readings(dialect) : NeverEscapes;
+        foreach (var reading in readings)
+        {
+            Mark(sql, marks, reading, doubleQuotedNames);
+        }
+
+        return Render(sql, marks, output);
+    }
+
+    /// <summary>Replaces every parameter with <c>@p</c> and every number, GUID and hexadecimal literal with <c>?</c>.</summary>
+    /// <param name="text">The text without strings and comments.</param>
+    /// <param name="output">Where the text is written; at least as long as <paramref name="text"/>, which it never outgrows.</param>
+    /// <returns>The length written.</returns>
+    private static int ReplaceValues(ReadOnlySpan<char> text, Span<char> output)
+    {
+        var written = 0;
+        var copied = 0;
+        foreach (var match in ValueRegex().EnumerateMatches(text))
+        {
+            text[copied..match.Index].CopyTo(output[written..]);
+            written += match.Index - copied;
+
+            // Only the parameter alternative starts with @, : or $; it is never shorter than "@p".
+            var replacement = text[match.Index] is '@' or ':' or '$' ? "@p" : "?";
+            replacement.AsSpan().CopyTo(output[written..]);
+            written += replacement.Length;
+            copied = match.Index + match.Length;
+        }
+
+        text[copied..].CopyTo(output[written..]);
+        return written + text.Length - copied;
+    }
+
+    /// <summary>Collapses every <c>IN</c> list of placeholders, parameters and NULLs to <c>IN (?)</c>.</summary>
+    /// <param name="text">The text with values replaced.</param>
+    /// <param name="output">Where the text is written; room for one more character per five of <paramref name="text"/>.</param>
+    /// <returns>The length written.</returns>
+    private static int ReplaceInLists(ReadOnlySpan<char> text, Span<char> output)
+    {
+        const string InList = "IN (?)";
+        var written = 0;
+        var copied = 0;
+        foreach (var match in InListRegex().EnumerateMatches(text))
+        {
+            text[copied..match.Index].CopyTo(output[written..]);
+            written += match.Index - copied;
+            InList.AsSpan().CopyTo(output[written..]);
+            written += InList.Length;
+            copied = match.Index + match.Length;
+        }
+
+        text[copied..].CopyTo(output[written..]);
+        return written + text.Length - copied;
+    }
+
+    /// <summary>Writes the text with every run of whitespace as one space and none at either end.</summary>
+    /// <param name="text">The text.</param>
+    /// <param name="output">Where the text is written; at least as long as <paramref name="text"/>.</param>
+    /// <returns>The length written; 0 when the text is only whitespace.</returns>
+    private static int CollapseWhitespace(ReadOnlySpan<char> text, Span<char> output)
+    {
+        var written = 0;
+        var pendingSpace = false;
+        foreach (var c in text)
+        {
+            if (char.IsWhiteSpace(c))
             {
-                Mark(sql, marks, reading, doubleQuotedNames);
+                pendingSpace = written > 0;
+                continue;
             }
 
-            return Render(sql, marks);
+            if (pendingSpace)
+            {
+                output[written++] = ' ';
+                pendingSpace = false;
+            }
+
+            output[written++] = c;
         }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(marks);
-        }
+
+        return written;
     }
 
     /// <summary>The readings of backslashes a dialect allows, under any server setting.</summary>
@@ -242,16 +325,18 @@ internal static partial class SqlFingerprint
     /// <summary>Writes the kept characters, one <c>?</c> per run of literal characters and one space per run of comment ones.</summary>
     /// <param name="sql">The command text.</param>
     /// <param name="marks">The marks every reading left.</param>
-    private static string Render(string sql, byte[] marks)
+    /// <param name="output">Where the text is written; at least as long as <paramref name="sql"/>, which it never outgrows.</param>
+    /// <returns>The length written.</returns>
+    private static int Render(string sql, byte[] marks, char[] output)
     {
-        var output = new StringBuilder(sql.Length);
+        var written = 0;
         var i = 0;
         while (i < sql.Length)
         {
             var mark = marks[i];
             if (mark == Code)
             {
-                output.Append(sql[i]);
+                output[written++] = sql[i];
                 i++;
                 continue;
             }
@@ -261,10 +346,10 @@ internal static partial class SqlFingerprint
                 i++;
             }
 
-            output.Append(mark == Value ? '?' : ' ');
+            output[written++] = mark == Value ? '?' : ' ';
         }
 
-        return output.ToString();
+        return written;
     }
 
     /// <summary>Whether the text has the character at the position.</summary>
@@ -435,9 +520,4 @@ internal static partial class SqlFingerprint
     /// <returns>The source-generated regex.</returns>
     [GeneratedRegex("""\bIN\s*\(\s*(?:@p|-?\?|NULL)(?:\s*,\s*(?:@p|-?\?|NULL))*\s*\)""", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex InListRegex();
-
-    /// <summary>Any run of whitespace.</summary>
-    /// <returns>The source-generated regex.</returns>
-    [GeneratedRegex("""\s+""", RegexOptions.CultureInvariant)]
-    private static partial Regex WhitespaceRegex();
 }
