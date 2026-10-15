@@ -250,7 +250,7 @@ internal sealed class NPlusOneCommandInterceptor : DbCommandInterceptor, ISaveCh
                 return;
             }
 
-            NPlusOneScope.RecordCommand(scope, kind, sql);
+            NPlusOneScope.RecordCommand(scope, kind, sql, SqlFingerprint.DialectOf(eventData.Context?.Database.ProviderName));
         }
 #pragma warning disable CA1031 // Recording must never break the command it observes.
         catch (Exception)
@@ -290,7 +290,7 @@ internal sealed class NPlusOneCommandInterceptor : DbCommandInterceptor, ISaveCh
 
         try
         {
-            NPlusOneScope.RecordCommand(scope, NPlusOneSuspectKind.Write, "BEGIN TRANSACTION");
+            NPlusOneScope.RecordCommand(scope, NPlusOneSuspectKind.Write, "BEGIN TRANSACTION", SqlDialect.Unknown);
         }
 #pragma warning disable CA1031 // Recording must never break the transaction it observes.
         catch (Exception)

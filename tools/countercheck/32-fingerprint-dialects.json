@@ -1,0 +1,62 @@
+[
+  {
+    "name": "The interceptor passes the provider's dialect",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/NPlusOneCommandInterceptor.cs",
+    "old": "SqlFingerprint.DialectOf(eventData.Context?.Database.ProviderName)",
+    "new": "SqlDialect.Unknown"
+  },
+  {
+    "name": "The SQL Server provider is SQL Server",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "\"Microsoft.EntityFrameworkCore.SqlServer\" => SqlDialect.SqlServer,",
+    "new": "\"Microsoft.EntityFrameworkCore.SqlServer\" => SqlDialect.Unknown,"
+  },
+  {
+    "name": "SQL Server reads a backslash as an ordinary character (readable side)",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "SqlDialect.SqlServer or SqlDialect.Sqlite or SqlDialect.Oracle => NeverEscapes,",
+    "new": "SqlDialect.SqlServer or SqlDialect.Sqlite or SqlDialect.Oracle => AllReadings,"
+  },
+  {
+    "name": "MySQL is also read with NO_BACKSLASH_ESCAPES",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "MySqlReadings = [Backslash.Always, Backslash.Never];",
+    "new": "MySqlReadings = [Backslash.Always];"
+  },
+  {
+    "name": "PostgreSQL is also read with standard_conforming_strings off",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "PostgreSqlReadings = [Backslash.Prefixed, Backslash.Always];",
+    "new": "PostgreSqlReadings = [Backslash.Prefixed];"
+  },
+  {
+    "name": "A backslash escapes inside E'' literals",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "var escapes = reading == Backslash.Always || (reading == Backslash.Prefixed && char.ToUpperInvariant(sql[start]) == 'E');",
+    "new": "var escapes = reading == Backslash.Always;"
+  },
+  {
+    "name": "Text with a backslash gets every reading of its dialect",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "var readings = sql.Contains('\\\\', StringComparison.Ordinal) ? Readings(dialect) : NeverEscapes;",
+    "new": "var readings = NeverEscapes;"
+  },
+  {
+    "name": "Double quotes hold values outside PostgreSQL, SQLite and Oracle",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "var doubleQuotedNames = dialect is SqlDialect.PostgreSql or SqlDialect.Sqlite or SqlDialect.Oracle;",
+    "new": "var doubleQuotedNames = true;"
+  },
+  {
+    "name": "Double quotes name columns in SQLite (readable side)",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "var doubleQuotedNames = dialect is SqlDialect.PostgreSql or SqlDialect.Sqlite or SqlDialect.Oracle;",
+    "new": "var doubleQuotedNames = dialect is SqlDialect.PostgreSql or SqlDialect.Oracle;"
+  },
+  {
+    "name": "A backslash escapes inside a double-quoted value",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "end = SkipQuotedRun(sql, i, '\"', reading == Backslash.Always);",
+    "new": "end = SkipQuotedRun(sql, i, '\"', false);"
+  }
+]

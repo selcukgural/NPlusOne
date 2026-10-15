@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace NPlusOne.EntityFrameworkCore.Recording;
@@ -11,28 +13,68 @@ namespace NPlusOne.EntityFrameworkCore.Recording;
 /// Two jobs depend on it. Grouping: the same query with different values, differently named
 /// parameters or a list of a different length has one fingerprint. Privacy: the fingerprint is the
 /// only SQL a report shows, so no value from the command can reach a log or an exception message.
-/// String literals and comments are removed in one left-to-right scan, so a quote inside a comment or
-/// <c>--</c> inside a string cannot hide or expose the text after it. Where SQL dialects disagree, the scan
-/// takes the reading that hides more: a backslash escapes the next character inside a literal (MySQL,
-/// PostgreSQL <c>E''</c>), block comments nest (PostgreSQL), and a double-quoted run that is not a plain
-/// identifier is a value (MySQL strings) rather than a name.
+/// String literals and comments are found in a left-to-right scan, so a quote inside a comment or
+/// <c>--</c> inside a string cannot hide or expose the text after it. Dialects disagree on two things, and a literal read
+/// the wrong way shows the text after it as if it were code: whether a backslash escapes a quote (MySQL, PostgreSQL
+/// <c>E''</c>, and others under some server settings) and whether a double-quoted run is a name (PostgreSQL, SQLite,
+/// Oracle) or a value (MySQL, SQL Server with <c>QUOTED_IDENTIFIER</c> off). The scan runs once for every reading the
+/// command's <see cref="SqlDialect"/> allows and hides each character that any reading takes for a value or a comment:
+/// a known dialect keeps its own code readable (SQL Server's <c>ESCAPE N'\'</c>), an unknown one gets every reading.
+/// Block comments nest (PostgreSQL) in every reading. One gap is left on purpose: SQLite takes a double-quoted word that
+/// names no column for a string, a legacy behaviour only hand-written SQL relies on, and the fingerprint shows it as the
+/// name it looks like, as it must for the names EF Core quotes.
 /// </remarks>
 internal static partial class SqlFingerprint
 {
     /// <summary>Returned for empty command text.</summary>
     private const string Empty = "(empty)";
 
+    /// <summary>A character the scan keeps.</summary>
+    private const byte Code = 0;
+
+    /// <summary>A character of a comment: replaced, with the rest of its run, by one space.</summary>
+    private const byte Comment = 1;
+
+    /// <summary>A character of a literal: replaced, with the rest of its run, by one <c>?</c>.</summary>
+    private const byte Value = 2;
+
+    /// <summary>The only reading of SQL Server, SQLite and Oracle, and of any text without a backslash.</summary>
+    private static readonly Backslash[] NeverEscapes = [Backslash.Never];
+
+    /// <summary>PostgreSQL with <c>standard_conforming_strings</c> on (the default), then off.</summary>
+    private static readonly Backslash[] PostgreSqlReadings = [Backslash.Prefixed, Backslash.Always];
+
+    /// <summary>MySQL by default, then with <c>NO_BACKSLASH_ESCAPES</c>.</summary>
+    private static readonly Backslash[] MySqlReadings = [Backslash.Always, Backslash.Never];
+
+    /// <summary>Every reading, for a dialect the guard does not know.</summary>
+    private static readonly Backslash[] AllReadings = [Backslash.Never, Backslash.Prefixed, Backslash.Always];
+
+    /// <summary>Where a backslash inside a quoted run escapes the next character.</summary>
+    private enum Backslash
+    {
+        /// <summary>Nowhere: it is an ordinary character.</summary>
+        Never,
+
+        /// <summary>Only inside PostgreSQL's <c>E''</c> literals.</summary>
+        Prefixed,
+
+        /// <summary>Inside every quoted run.</summary>
+        Always,
+    }
+
     /// <summary>Normalizes <paramref name="sql"/>.</summary>
     /// <param name="sql">The command text.</param>
+    /// <param name="dialect">The dialect the command was written in; <see cref="SqlDialect.Unknown"/> hides the most.</param>
     /// <returns>The fingerprint; never contains a literal from the input.</returns>
-    public static string Create(string? sql)
+    public static string Create(string? sql, SqlDialect dialect)
     {
         if (string.IsNullOrWhiteSpace(sql))
         {
             return Empty;
         }
 
-        var text = RemoveStringsAndComments(sql);
+        var text = RemoveStringsAndComments(sql, dialect);
         text = ValueRegex().Replace(text, static match => match.Groups["param"].Success ? "@p" : "?");
         text = InListRegex().Replace(text, "IN (?)");
         text = WhitespaceRegex().Replace(text, " ").Trim();
@@ -40,54 +82,152 @@ internal static partial class SqlFingerprint
     }
 
     /// <summary>
+    /// The dialect of an EF Core provider, by its name (<c>context.Database.ProviderName</c>). Only the providers whose
+    /// quoting rules are known map to a dialect; any other is <see cref="SqlDialect.Unknown"/> and gets every reading.
+    /// </summary>
+    /// <param name="providerName">The provider's name, or <see langword="null"/> when there is no context.</param>
+    /// <returns>The dialect.</returns>
+    public static SqlDialect DialectOf(string? providerName) => providerName switch
+    {
+        "Microsoft.EntityFrameworkCore.SqlServer" => SqlDialect.SqlServer,
+        "Microsoft.EntityFrameworkCore.Sqlite" => SqlDialect.Sqlite,
+        "Npgsql.EntityFrameworkCore.PostgreSQL" => SqlDialect.PostgreSql,
+        "Pomelo.EntityFrameworkCore.MySql" or "MySql.EntityFrameworkCore" => SqlDialect.MySql,
+        "Oracle.EntityFrameworkCore" => SqlDialect.Oracle,
+        _ => SqlDialect.Unknown,
+    };
+
+    /// <summary>
     /// Replaces every string literal with <c>?</c> and every comment with a space: single-quoted literals (with an
-    /// <c>N</c>, <c>E</c>, <c>X</c>, <c>B</c> or <c>U&amp;</c> prefix, doubled quotes and backslash escapes inside),
-    /// Oracle's <c>q'[...]'</c>, PostgreSQL's dollar quotes (<c>$$...$$</c>, <c>$tag$...$tag$</c>), double-quoted runs
-    /// that are not plain identifiers, line comments and nested block comments. An unterminated literal or comment
-    /// runs to the end of the text.
+    /// <c>N</c>, <c>E</c>, <c>X</c>, <c>B</c> or <c>U&amp;</c> prefix and doubled quotes inside), Oracle's
+    /// <c>q'[...]'</c>, PostgreSQL's dollar quotes (<c>$$...$$</c>, <c>$tag$...$tag$</c>), double-quoted runs that are
+    /// values in the dialect, line comments and nested block comments, under every reading of backslashes the dialect
+    /// allows. An unterminated literal or comment runs to the end of the text.
     /// </summary>
     /// <param name="sql">The command text.</param>
-    private static string RemoveStringsAndComments(string sql)
+    /// <param name="dialect">The dialect of the command.</param>
+    private static string RemoveStringsAndComments(string sql, SqlDialect dialect)
     {
-        var output = new System.Text.StringBuilder(sql.Length);
+        var marks = ArrayPool<byte>.Shared.Rent(sql.Length);
+        try
+        {
+            Array.Clear(marks, 0, sql.Length);
+            var doubleQuotedNames = dialect is SqlDialect.PostgreSql or SqlDialect.Sqlite or SqlDialect.Oracle;
+
+            // The readings differ only in what a backslash does: without one, they all find the same runs.
+            var readings = sql.Contains('\\', StringComparison.Ordinal) ? Readings(dialect) : NeverEscapes;
+            foreach (var reading in readings)
+            {
+                Mark(sql, marks, reading, doubleQuotedNames);
+            }
+
+            return Render(sql, marks);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(marks);
+        }
+    }
+
+    /// <summary>The readings of backslashes a dialect allows, under any server setting.</summary>
+    /// <param name="dialect">The dialect.</param>
+    private static Backslash[] Readings(SqlDialect dialect) => dialect switch
+    {
+        SqlDialect.SqlServer or SqlDialect.Sqlite or SqlDialect.Oracle => NeverEscapes,
+        SqlDialect.PostgreSql => PostgreSqlReadings,
+        SqlDialect.MySql => MySqlReadings,
+        _ => AllReadings,
+    };
+
+    /// <summary>
+    /// Scans the text under one reading and raises the mark of every character this reading finds in a comment or a
+    /// literal. Marks only go up, so a character stays hidden once any reading hides it.
+    /// </summary>
+    /// <param name="sql">The command text.</param>
+    /// <param name="marks">One mark per character of <paramref name="sql"/>.</param>
+    /// <param name="reading">What a backslash does in this reading.</param>
+    /// <param name="doubleQuotedNames">Whether a double-quoted plain identifier is a name, kept in the fingerprint.</param>
+    private static void Mark(string sql, byte[] marks, Backslash reading, bool doubleQuotedNames)
+    {
         var i = 0;
         while (i < sql.Length)
         {
             var c = sql[i];
+            int end;
+            var mark = Value;
             if (c == '-' && At(sql, i + 1, '-'))
             {
-                i = sql.IndexOfAny(['\r', '\n'], i) is var end and >= 0 ? end : sql.Length;
-                output.Append(' ');
+                end = sql.AsSpan(i).IndexOfAny('\r', '\n') is var newline and >= 0 ? i + newline : sql.Length;
+                mark = Comment;
             }
             else if (c == '/' && At(sql, i + 1, '*'))
             {
-                i = SkipBlockComment(sql, i);
-                output.Append(' ');
+                end = SkipBlockComment(sql, i);
+                mark = Comment;
             }
             else if (c == '\'' || IsLiteralPrefix(sql, i))
             {
-                i = SkipQuoted(sql, i);
-                output.Append('?');
+                end = SkipQuoted(sql, i, reading);
             }
             else if (c == '$' && DollarTag(sql, i) is { } tag)
             {
                 var close = sql.IndexOf(tag, i + tag.Length, StringComparison.Ordinal);
-                i = close < 0 ? sql.Length : close + tag.Length;
-                output.Append('?');
+                end = close < 0 ? sql.Length : close + tag.Length;
             }
             else if (c == '"')
             {
                 var close = sql.IndexOf('"', i + 1);
-                var end = close < 0 ? sql.Length : close + 1;
-                var content = sql.AsSpan(i + 1, Math.Max(0, (close < 0 ? sql.Length : close) - i - 1));
-                output.Append(IsPlainIdentifier(content) && close >= 0 ? sql.AsSpan(i, end - i) : "?");
-                i = end;
+                if (doubleQuotedNames && close >= 0 && IsPlainIdentifier(sql.AsSpan(i + 1, close - i - 1)))
+                {
+                    end = close + 1;
+                    mark = Code;
+                }
+                else
+                {
+                    end = SkipQuotedRun(sql, i, '"', reading == Backslash.Always);
+                }
             }
             else
             {
-                output.Append(c);
+                i++;
+                continue;
+            }
+
+            for (var k = i; k < end; k++)
+            {
+                if (marks[k] < mark)
+                {
+                    marks[k] = mark;
+                }
+            }
+
+            i = end;
+        }
+    }
+
+    /// <summary>Writes the kept characters, one <c>?</c> per run of literal characters and one space per run of comment ones.</summary>
+    /// <param name="sql">The command text.</param>
+    /// <param name="marks">The marks every reading left.</param>
+    private static string Render(string sql, byte[] marks)
+    {
+        var output = new StringBuilder(sql.Length);
+        var i = 0;
+        while (i < sql.Length)
+        {
+            var mark = marks[i];
+            if (mark == Code)
+            {
+                output.Append(sql[i]);
+                i++;
+                continue;
+            }
+
+            while (i < sql.Length && marks[i] == mark)
+            {
                 i++;
             }
+
+            output.Append(mark == Value ? '?' : ' ');
         }
 
         return output.ToString();
@@ -122,12 +262,13 @@ internal static partial class SqlFingerprint
 
     /// <summary>
     /// The end of a quoted literal that starts at <paramref name="start"/> (with or without a prefix): Oracle's
-    /// <c>q'[...]'</c> ends at its closing delimiter and quote, any other at a quote that is neither doubled nor escaped
-    /// with a backslash.
+    /// <c>q'[...]'</c> ends at its closing delimiter and quote, any other at a quote that is neither doubled nor, where
+    /// the reading says so, escaped with a backslash.
     /// </summary>
     /// <param name="sql">The text.</param>
     /// <param name="start">Where the literal or its prefix starts.</param>
-    private static int SkipQuoted(string sql, int start)
+    /// <param name="reading">What a backslash does in this reading.</param>
+    private static int SkipQuoted(string sql, int start, Backslash reading)
     {
         var quote = sql.IndexOf('\'', start);
         if (char.ToUpperInvariant(sql[start]) == 'Q' && quote == start + 1 && quote + 1 < sql.Length)
@@ -145,15 +286,26 @@ internal static partial class SqlFingerprint
             return end < 0 ? sql.Length : end + 2;
         }
 
-        for (var i = quote + 1; i < sql.Length; i++)
+        var escapes = reading == Backslash.Always || (reading == Backslash.Prefixed && char.ToUpperInvariant(sql[start]) == 'E');
+        return SkipQuotedRun(sql, quote, '\'', escapes);
+    }
+
+    /// <summary>The end of a run quoted with <paramref name="quote"/>: the first quote that is neither doubled nor escaped.</summary>
+    /// <param name="sql">The text.</param>
+    /// <param name="open">The position of the opening quote.</param>
+    /// <param name="quote">The quote character.</param>
+    /// <param name="backslashEscapes">Whether a backslash escapes the next character.</param>
+    private static int SkipQuotedRun(string sql, int open, char quote, bool backslashEscapes)
+    {
+        for (var i = open + 1; i < sql.Length; i++)
         {
-            if (sql[i] == '\\')
+            if (backslashEscapes && sql[i] == '\\')
             {
                 i++;
             }
-            else if (sql[i] == '\'')
+            else if (sql[i] == quote)
             {
-                if (!At(sql, i + 1, '\''))
+                if (!At(sql, i + 1, quote))
                 {
                     return i + 1;
                 }

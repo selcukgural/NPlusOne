@@ -145,10 +145,15 @@ Load the data once for all elements instead: Include, a projection, or one query
 ```
 
 Reports never contain parameter values or literals: the SQL shown is always the fingerprint,
-never the command text. A report is safe to log and to put into an exception message. Where SQL dialects disagree, the
-fingerprint takes the reading that hides more: a backslash escapes a quote (MySQL, PostgreSQL `E''`), dollar quotes
-(`$$...$$`) and Oracle's `q'[...]'` are literals, block comments nest, and a double-quoted run that is not a plain
-identifier counts as a value. The guard only observes: if recording fails (an ignored pattern that times out, say), that
+never the command text. A report is safe to log and to put into an exception message. Dialects disagree on what a
+backslash and a double quote mean, and a literal read the wrong way would show the text after it, so the fingerprint
+reads each command in its provider's dialect (SQL Server, SQLite, PostgreSQL, MySQL, Oracle), under every server
+setting that changes the reading (MySQL's `NO_BACKSLASH_ESCAPES`, PostgreSQL's `standard_conforming_strings`), and
+hides what any of these readings takes for a value. Double-quoted names stay readable on PostgreSQL, SQLite and Oracle;
+on MySQL and SQL Server a double-quoted run is a value. Other providers get every reading. Dollar quotes (`$$...$$`) and
+Oracle's `q'[...]'` are literals and block comments nest everywhere. One gap is left: SQLite's legacy reading of a
+double-quoted word that names no column as a string (hand-written SQL only) shows the word, as it must for the names
+EF Core quotes. The guard only observes: if recording fails (an ignored pattern that times out, say), that
 one record is dropped and the application's command runs as usual.
 
 ## Limitations

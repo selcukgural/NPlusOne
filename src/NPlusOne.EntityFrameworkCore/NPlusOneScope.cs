@@ -110,7 +110,8 @@ public sealed class NPlusOneScope : IDisposable
     /// <param name="innermost">The current scope.</param>
     /// <param name="kind"><see cref="NPlusOneSuspectKind.Query"/> or <see cref="NPlusOneSuspectKind.Write"/>.</param>
     /// <param name="sql">The command text as sent to the database; never stored.</param>
-    internal static void RecordCommand(NPlusOneScope innermost, NPlusOneSuspectKind kind, string sql)
+    /// <param name="dialect">The dialect the command is written in, which decides how its literals are found.</param>
+    internal static void RecordCommand(NPlusOneScope innermost, NPlusOneSuspectKind kind, string sql, SqlDialect dialect)
     {
         string? fingerprint = null;
         string? callSite = null;
@@ -122,7 +123,7 @@ public sealed class NPlusOneScope : IDisposable
                 continue;
             }
 
-            fingerprint ??= SqlFingerprint.Create(sql);
+            fingerprint ??= SqlFingerprint.Create(sql, dialect);
             if (scope._settings.CaptureCallSite && !callSiteCaptured)
             {
                 callSite = CallSiteLocator.Capture(null);

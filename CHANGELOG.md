@@ -25,6 +25,14 @@
 - A `base.Method(...)` call runs only the base implementation: in a loop it is reported when the base queries or reads
   a navigation, not when only an override does (NP0001, NP0002), and a query it returns keeps the base's includes.
 
+**`NPlusOne.EntityFrameworkCore`**
+
+- The SQL in reports is read in the provider's dialect (SQL Server, SQLite, PostgreSQL, MySQL, Oracle), under every
+  server setting that changes how backslashes and double quotes are read; another provider gets every reading. A literal
+  ending in a backslash on SQL Server, SQLite or Oracle, and a double-quoted string on MySQL or SQL Server, are now
+  hidden like any other literal, and SQL Server's and SQLite's `LIKE ... ESCAPE '\'` no longer hides the rest of the
+  query.
+
 ## 1.0.0
 
 The first release.

@@ -42,7 +42,10 @@ traffic.
 ## Can a report leak data?
 
 No. Reports carry the SQL with every literal and parameter replaced, never parameter values, so they are safe to log
-and to put in exception messages.
+and to put in exception messages. Each command is read in its provider's dialect, so a backslash or a double quote cannot
+make a literal look like code. One narrow exception: hand-written SQL on SQLite that puts a string in double quotes
+(`WHERE Name = "Alice"`) shows that word, since EF Core writes every column name that way. See
+[the runtime guard](../runtime.md#what-a-report-looks-like).
 
 ## How does it compare with other tools?
 

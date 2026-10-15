@@ -13,39 +13,93 @@ public sealed class SqlFingerprintTests
     [InlineData("SELECT * FROM t WHERE b = 0x1F2E", "SELECT * FROM t WHERE b = ?")]
     [InlineData("SELECT * FROM t WHERE a = @__customer_Id_0 AND b = @p1 AND c = :name AND d = $1", "SELECT * FROM t WHERE a = @p AND b = @p AND c = @p AND d = @p")]
     [InlineData("SELECT @@ROWCOUNT, x::int FROM t", "SELECT @@ROWCOUNT, x::int FROM t")]
-    [InlineData("SELECT \"t0\".\"Col1\" FROM \"Table2\" AS \"t0\"", "SELECT \"t0\".\"Col1\" FROM \"Table2\" AS \"t0\"")]
     [InlineData("SELECT  *\r\n  FROM\tt", "SELECT * FROM t")]
     [InlineData("-- tag with 'quote\nSELECT 1 /* id = 5 */ FROM t", "SELECT ? FROM t")]
     [InlineData("SELECT * FROM t WHERE s = 'a -- not a comment' AND x = 1", "SELECT * FROM t WHERE s = ? AND x = ?")]
     [InlineData("SELECT * FROM t WHERE s = 'unterminated secret", "SELECT * FROM t WHERE s = ?")]
     [InlineData("", "(empty)")]
-    public void Normalizes_values(string sql, string expected) => Assert.Equal(expected, SqlFingerprint.Create(sql));
+    public void Normalizes_values(string sql, string expected)
+    {
+        foreach (var dialect in Enum.GetValues<SqlDialect>())
+        {
+            Assert.Equal(expected, SqlFingerprint.Create(sql, dialect));
+        }
+    }
 
-    // Dialects disagree on escapes, quotes and comments; the fingerprint takes the reading that hides more.
+    // Text every dialect reads the same way: no literal shows in any of them.
     [Theory]
-    [InlineData("SELECT * FROM t WHERE pw = 'abc\\' OR secret word'", "SELECT * FROM t WHERE pw = ?")]
-    [InlineData("SELECT * FROM t WHERE pw = E'abc\\' OR secret word'", "SELECT * FROM t WHERE pw = ?")]
     [InlineData("SELECT $$top secret$$, $tag$top secret$tag$ FROM t WHERE a = $1", "SELECT ?, ? FROM t WHERE a = @p")]
-    [InlineData("SELECT * FROM t WHERE email = \"alice@example.com\"", "SELECT * FROM t WHERE email = ?")]
+    [InlineData("SELECT * FROM t WHERE email = \"alice@secret.com\"", "SELECT * FROM t WHERE email = ?")]
     [InlineData("SELECT 1 /* a /* b */ leaked secret */ FROM t", "SELECT ? FROM t")]
     [InlineData("SELECT * FROM t WHERE name = q'[O'Brien secret]'", "SELECT * FROM t WHERE name = ?")]
     [InlineData("SELECT * FROM t WHERE name = U&'secret' AND b = B'0101'", "SELECT * FROM t WHERE name = ? AND b = ?")]
-    [InlineData("SELECT \"Order Details\".\"Id\" FROM \"Order Details\"", "SELECT \"Order Details\".\"Id\" FROM \"Order Details\"")]
     [InlineData("SELECT * FROM t WHERE id IN (-1, 2, -3)", "SELECT * FROM t WHERE id IN (?)")]
     public void Never_shows_a_literal_in_any_dialect(string sql, string expected)
     {
-        var fingerprint = SqlFingerprint.Create(sql);
+        foreach (var dialect in Enum.GetValues<SqlDialect>())
+        {
+            var fingerprint = SqlFingerprint.Create(sql, dialect);
+            Assert.Equal(expected, fingerprint);
+            Assert.DoesNotContain("secret", fingerprint, StringComparison.Ordinal);
+        }
+    }
+
+    // Dialects disagree on backslashes and double quotes. A known dialect is read its own way, under every server setting
+    // that changes the reading (MySQL's NO_BACKSLASH_ESCAPES, PostgreSQL's standard_conforming_strings); an unknown one
+    // under every reading. A character any of these readings takes for a value is hidden.
+    [Theory]
+    [InlineData("SqlServer", "SELECT * FROM t WHERE path = N'C:\\' AND name = N'secret'", "SELECT * FROM t WHERE path = ? AND name = ?")]
+    [InlineData("Sqlite", "SELECT * FROM t WHERE path = 'C:\\' AND name = 'secret'", "SELECT * FROM t WHERE path = ? AND name = ?")]
+    [InlineData("Oracle", "SELECT * FROM t WHERE path = 'C:\\' AND name = 'secret'", "SELECT * FROM t WHERE path = ? AND name = ?")]
+    [InlineData("PostgreSql", "SELECT * FROM t WHERE path = 'C:\\' AND name = 'secret'", "SELECT * FROM t WHERE path = ?")]
+    [InlineData("MySql", "SELECT * FROM t WHERE path = 'C:\\' AND name = 'secret'", "SELECT * FROM t WHERE path = ?")]
+    [InlineData("Unknown", "SELECT * FROM t WHERE path = 'C:\\' AND name = 'secret'", "SELECT * FROM t WHERE path = ?")]
+    [InlineData("MySql", "SELECT * FROM t WHERE pw = 'abc\\' OR secret word'", "SELECT * FROM t WHERE pw = ?")]
+    [InlineData("PostgreSql", "SELECT * FROM t WHERE pw = 'abc\\' OR secret word'", "SELECT * FROM t WHERE pw = ?")]
+    [InlineData("PostgreSql", "SELECT * FROM t WHERE pw = E'abc\\' OR secret word'", "SELECT * FROM t WHERE pw = ?")]
+    [InlineData("Unknown", "SELECT * FROM t WHERE pw = 'abc\\' OR secret word'", "SELECT * FROM t WHERE pw = ?")]
+    [InlineData("PostgreSql", "SELECT E'a\\'b', 'C:\\', 'secret' FROM t", "SELECT ?, ?")]
+    [InlineData("MySql", "SELECT * FROM t WHERE name = \"secret\"", "SELECT * FROM t WHERE name = ?")]
+    [InlineData("MySql", "SELECT * FROM t WHERE name = \"abc\\\" OR secret\"", "SELECT * FROM t WHERE name = ?")]
+    [InlineData("SqlServer", "SELECT * FROM t WHERE name = \"secret\"", "SELECT * FROM t WHERE name = ?")]
+    [InlineData("Unknown", "SELECT * FROM t WHERE name = \"secret\"", "SELECT * FROM t WHERE name = ?")]
+    public void Never_shows_a_literal_in_its_dialect(string dialect, string sql, string expected)
+    {
+        var fingerprint = SqlFingerprint.Create(sql, Enum.Parse<SqlDialect>(dialect));
         Assert.Equal(expected, fingerprint);
         Assert.DoesNotContain("secret", fingerprint, StringComparison.Ordinal);
     }
 
+    // The other side: what a dialect reads as code or as a name stays readable.
+    [Theory]
+    [InlineData("SqlServer", "SELECT [c].[Id] FROM [Customers] AS [c] WHERE [c].[Name] LIKE @__p_0 ESCAPE N'\\' AND [c].[Id] > 3", "SELECT [c].[Id] FROM [Customers] AS [c] WHERE [c].[Name] LIKE @p ESCAPE ? AND [c].[Id] > ?")]
+    [InlineData("Sqlite", "SELECT \"c\".\"Id\" FROM \"Customers\" AS \"c\" WHERE \"c\".\"Name\" LIKE @__p_0 ESCAPE '\\' AND \"c\".\"Id\" > 3", "SELECT \"c\".\"Id\" FROM \"Customers\" AS \"c\" WHERE \"c\".\"Name\" LIKE @p ESCAPE ? AND \"c\".\"Id\" > ?")]
+    [InlineData("PostgreSql", "SELECT \"t0\".\"Col1\" FROM \"Order Details\" AS \"t0\"", "SELECT \"t0\".\"Col1\" FROM \"Order Details\" AS \"t0\"")]
+    [InlineData("Sqlite", "SELECT \"t0\".\"Col1\" FROM \"Order Details\" AS \"t0\"", "SELECT \"t0\".\"Col1\" FROM \"Order Details\" AS \"t0\"")]
+    [InlineData("Oracle", "SELECT \"t0\".\"Col1\" FROM \"Order Details\" AS \"t0\"", "SELECT \"t0\".\"Col1\" FROM \"Order Details\" AS \"t0\"")]
+    [InlineData("MySql", "SELECT `t0`.`Col1` FROM `Order Details` AS `t0`", "SELECT `t0`.`Col1` FROM `Order Details` AS `t0`")]
+    public void Keeps_code_and_names_readable(string dialect, string sql, string expected)
+        => Assert.Equal(expected, SqlFingerprint.Create(sql, Enum.Parse<SqlDialect>(dialect)));
+
+    [Theory]
+    [InlineData("Microsoft.EntityFrameworkCore.SqlServer", "SqlServer")]
+    [InlineData("Microsoft.EntityFrameworkCore.Sqlite", "Sqlite")]
+    [InlineData("Npgsql.EntityFrameworkCore.PostgreSQL", "PostgreSql")]
+    [InlineData("Pomelo.EntityFrameworkCore.MySql", "MySql")]
+    [InlineData("MySql.EntityFrameworkCore", "MySql")]
+    [InlineData("Oracle.EntityFrameworkCore", "Oracle")]
+    [InlineData("FirebirdSql.EntityFrameworkCore.Firebird", "Unknown")]
+    [InlineData(null, "Unknown")]
+    public void Reads_the_dialect_from_the_provider(string? providerName, string expected)
+        => Assert.Equal(Enum.Parse<SqlDialect>(expected), SqlFingerprint.DialectOf(providerName));
+
     [Fact]
     public void In_lists_of_different_lengths_share_one_shape()
     {
-        var two = SqlFingerprint.Create("SELECT * FROM t WHERE id IN (@p0, @p1)");
-        var five = SqlFingerprint.Create("SELECT * FROM t WHERE id IN (@p0,@p1,@p2,@p3,@p4)");
-        var literals = SqlFingerprint.Create("SELECT * FROM t WHERE id IN (1, 2, 3, NULL)");
-        var strings = SqlFingerprint.Create("SELECT * FROM t WHERE id in ('a', 'b')");
+        var two = SqlFingerprint.Create("SELECT * FROM t WHERE id IN (@p0, @p1)", SqlDialect.Sqlite);
+        var five = SqlFingerprint.Create("SELECT * FROM t WHERE id IN (@p0,@p1,@p2,@p3,@p4)", SqlDialect.Sqlite);
+        var literals = SqlFingerprint.Create("SELECT * FROM t WHERE id IN (1, 2, 3, NULL)", SqlDialect.Sqlite);
+        var strings = SqlFingerprint.Create("SELECT * FROM t WHERE id in ('a', 'b')", SqlDialect.Sqlite);
 
         Assert.Equal("SELECT * FROM t WHERE id IN (?)", two);
         Assert.Equal(two, five);
@@ -57,7 +111,7 @@ public sealed class SqlFingerprintTests
     public void Different_values_share_one_fingerprint()
     {
         Assert.Equal(
-            SqlFingerprint.Create("SELECT * FROM t WHERE a = 1 AND b = 'x'"),
-            SqlFingerprint.Create("SELECT * FROM t WHERE a = 99 AND b = 'something else'"));
+            SqlFingerprint.Create("SELECT * FROM t WHERE a = 1 AND b = 'x'", SqlDialect.Sqlite),
+            SqlFingerprint.Create("SELECT * FROM t WHERE a = 99 AND b = 'something else'", SqlDialect.Sqlite));
     }
 }

@@ -355,6 +355,17 @@ assigned source is never read half-built by another thread. Counter-checks `tool
   file at a time (an added `DbSet`, a moved base list, a changed constant, a changed referenced project, partial and
   nested types); counter-check `tools/countercheck/29-ide-performance.json`: all 13 parts red when undone.
 
+- ~~**Fingerprint dialects.**~~ (done 2026-10-15) The fingerprint read every command one way: a backslash escaped a
+  quote and a double-quoted plain word was a name. On SQL Server, SQLite and Oracle a backslash is an ordinary character,
+  so after a literal ending in one (`N'C:\'`) the next literal was taken for code and shown; on MySQL (and SQL Server
+  with `QUOTED_IDENTIFIER` off) `"Alice"` is a string and was shown; SQL Server's `ESCAPE N'\'` hid the rest of the
+  query. Now the interceptor passes the provider's `SqlDialect` (`Database.ProviderName`), and the scan runs once per
+  reading of backslashes the dialect allows under any server setting (MySQL's `NO_BACKSLASH_ESCAPES`, PostgreSQL's
+  `standard_conforming_strings`; every reading for another provider), hiding each character any reading takes for a
+  value. Double-quoted plain words stay names on PostgreSQL, SQLite and Oracle only. Tests: `SqlFingerprintTests`
+  (both sides per dialect; red before, 19 failures). Counter-check `tools/countercheck/32-fingerprint-dialects.json`
+  (run with `--project tests/NPlusOne.EntityFrameworkCore.Tests --filter FullyQualifiedName~NPlusOne.EntityFrameworkCore.Tests`):
+  all 10 parts red when undone.
 - **ABP samples.** Scanned 2026-10-13, see item 8: the scan found nothing because the analyzer could not see ABP code.
 - **GraphQL resolvers (catalogue C24).** Hot Chocolate type-extension resolvers taking `[Parent]` run once per parent
   without a DataLoader; see what the analyzer misses there and decide whether to follow them before Dapper and ADO.NET.
