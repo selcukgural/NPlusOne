@@ -278,7 +278,7 @@ internal sealed partial class BlockAnalyzer
     /// <param name="ordinal">The parameter it is passed as.</param>
     private void CheckElementArgument(IOperation operation, IOperation value, IMethodSymbol method, int ordinal)
     {
-        if (_lazy.ElementOf(value) is not { } element || value.Type is not { } elementType || LazyLoadingTurnedOffBefore(operation))
+        if (!session.Entities.AnyLazyLoading || _lazy.ElementOf(value) is not { } element || value.Type is not { } elementType || LazyLoadingTurnedOffBefore(operation))
         {
             return;
         }

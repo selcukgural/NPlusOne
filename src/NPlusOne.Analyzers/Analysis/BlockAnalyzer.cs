@@ -111,6 +111,11 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
             context.ReportDiagnostic(Diagnostic.Create(Descriptors.QueryPerElement, location, AdditionalLocations(query), Messages.QueryPerElement(query, iteration, callee)));
         }
 
+        if (!session.Entities.AnyLazyLoading)
+        {
+            return;
+        }
+
         foreach (var argument in invocation.Arguments)
         {
             if (argument.Parameter is not { } parameter || traced[parameter.Ordinal] is not { Kind: OriginKind.Ef } element || argument.Value.Type is not { } type)
@@ -575,6 +580,12 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
     /// <param name="invocation">The call.</param>
     private void CheckSequenceArguments(IInvocationOperation invocation)
     {
+        // Runs for every call: without lazy loading no navigation read can load, so nothing is traced.
+        if (!session.Entities.AnyLazyLoading)
+        {
+            return;
+        }
+
         foreach (var argument in invocation.Arguments)
         {
             if (argument.Parameter is null
@@ -613,7 +624,7 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
     /// <param name="location">Where to report.</param>
     private void CheckInstanceMember(IOperation operation, IOperation? instance, IMethodSymbol member, Location location)
     {
-        if (instance is null || member.IsStatic || _lazy.ElementOf(instance) is not { } element || LazyLoadingTurnedOffBefore(operation))
+        if (!session.Entities.AnyLazyLoading || instance is null || member.IsStatic || _lazy.ElementOf(instance) is not { } element || LazyLoadingTurnedOffBefore(operation))
         {
             return;
         }
@@ -805,7 +816,7 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
                 context.ReportDiagnostic(Diagnostic.Create(Descriptors.SavePerElement, location, AdditionalLocations(save), Messages.SavePerElement(save, iteration, callee)));
             }
 
-            if (group.Parameters.Length == 0 || LazyLoadingTurnedOffBefore(invocation))
+            if (!session.Entities.AnyLazyLoading || group.Parameters.Length == 0 || LazyLoadingTurnedOffBefore(invocation))
             {
                 continue;
             }
@@ -829,6 +840,11 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
     /// <param name="invocation">The call inside an iteration.</param>
     private void CheckMapperArguments(IInvocationOperation invocation)
     {
+        if (!session.Entities.AnyLazyLoading)
+        {
+            return;
+        }
+
         foreach (var argument in invocation.Arguments)
         {
             if (argument.Parameter is not null)

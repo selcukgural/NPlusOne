@@ -543,6 +543,9 @@ In the IDE, a declaration edit costs four times a body edit.
   `foreach` declaring each local, the first `LazyLoadingEnabled = false`, explicit loads). The lazy-load checks
   (`CheckInstanceMember`, `CheckElementArgument`, `CheckSequenceArguments`, parts of `CheckMethodGroups` and
   `CheckClientProjection`) can never report without lazy loading: return first when `AnyLazyLoading` is false.
+  - ~~Lazy-load checks without lazy loading~~ (done 2026-10-15): a navigation is lazy only with proxies or an entity that
+    takes a lazy loader, which is what `AnyLazyLoading` answers, so those checks (and `CheckMapperArguments`) now return
+    first without it. The walk index is still to do.
 - **A5. Bounded call-graph searches.** `Session.Reaches` and `CollectNavigationReads` explore every path to the depth
   limit with no visited set. Search breadth first with a visited set (a shorter path leaves more depth), and cache
   `NavigationReadsOf`.
