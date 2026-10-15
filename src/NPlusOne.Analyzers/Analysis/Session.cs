@@ -37,7 +37,10 @@ internal sealed class Session
     private readonly ConcurrentDictionary<IMethodSymbol, ImmutableArray<IMethodSymbol>> _targets = new(SymbolEqualityComparer.Default);
     private readonly ConcurrentDictionary<WitnessKey, Witness?> _witnesses = new();
     private readonly Lazy<ImmutableArray<INamedTypeSymbol>> _sourceTypes;
-    private readonly Lazy<DispatchCandidates> _candidateTypes;
+    private readonly Lazy<ImmutableArray<INamedTypeSymbol>> _completeTypes;
+    private readonly Lazy<ImmutableArray<INamedTypeSymbol>> _implementing;
+    private readonly Lazy<ImmutableArray<INamedTypeSymbol>> _overriding;
+    private readonly Func<ImmutableArray<INamedTypeSymbol>> _implementingCandidates;
     private readonly DeclarationFacts _facts;
     private readonly ConcurrentDictionary<string, Lazy<ImmutableArray<INamedTypeSymbol>>> _mediatorTypes = new(StringComparer.Ordinal);
     private readonly Lazy<ReferencedSummaries> _referenced;
@@ -61,7 +64,10 @@ internal sealed class Session
         _facts = DeclarationFacts.For(compilation);
         Entities = new EntityModel(compilation, symbols, settings.LazyLoading, () => _referenced.Value.AutoIncludes(compilation), _facts);
         _sourceTypes = new Lazy<ImmutableArray<INamedTypeSymbol>>(CollectSourceTypes);
-        _candidateTypes = new Lazy<DispatchCandidates>(CollectCandidateTypes);
+        _completeTypes = new Lazy<ImmutableArray<INamedTypeSymbol>>(CollectCompleteTypes);
+        _implementing = new Lazy<ImmutableArray<INamedTypeSymbol>>(() => CollectCandidateTypes(Model.Symbols.MayDeriveOrImplement));
+        _overriding = new Lazy<ImmutableArray<INamedTypeSymbol>>(() => CollectCandidateTypes(Model.Symbols.MayOverride));
+        _implementingCandidates = () => _implementing.Value;
         Mappings = new Mappings(compilation, Entities, symbols, _facts);
         _endpointHandlers = new Lazy<ImmutableHashSet<IMethodSymbol>>(CollectEndpointHandlers);
         _registeredBehaviors = new Lazy<ImmutableHashSet<ITypeSymbol>>(CollectRegisteredBehaviors);
@@ -397,7 +403,7 @@ internal sealed class Session
     private ImmutableArray<INamedTypeSymbol> MediatorTypes(string mediatorNamespace)
         => _mediatorTypes.GetOrAdd(
             mediatorNamespace,
-            ns => new Lazy<ImmutableArray<INamedTypeSymbol>>(() => _facts.ImplementersOfAny(Compilation, _candidateTypes.Value.Implementing, ns, MediatorInterfaces))).Value;
+            ns => new Lazy<ImmutableArray<INamedTypeSymbol>>(() => _facts.ImplementersOfAny(Compilation, _implementingCandidates, ns, MediatorInterfaces))).Value;
 
     /// <summary>Adds a type's implementation of the interface's <c>Handle</c>, when its source is in the compilation.</summary>
     /// <param name="builder">The handlers found so far.</param>
@@ -923,7 +929,7 @@ internal sealed class Session
 
         var candidates = method.ContainingType.TypeKind == TypeKind.Interface
             ? Implementers(method.ContainingType.OriginalDefinition)
-            : _candidateTypes.Value.Overriding;
+            : _overriding.Value;
         foreach (var type in candidates)
         {
             if (builder.Count >= MaxImplementations)
@@ -948,7 +954,7 @@ internal sealed class Session
     /// </summary>
     /// <param name="iface">The interface definition.</param>
     private ImmutableArray<INamedTypeSymbol> Implementers(INamedTypeSymbol iface)
-        => _facts.Implementers(Compilation, _candidateTypes.Value.Implementing, iface);
+        => _facts.Implementers(Compilation, _implementingCandidates, iface);
 
     /// <summary>The member of <paramref name="type"/> that a call to <paramref name="method"/> runs on an instance of it.</summary>
     /// <param name="type">A source type.</param>
@@ -1078,36 +1084,38 @@ internal sealed class Session
     }
 
     /// <summary>
-    /// The types an interface or virtual call can land in: the source types, and the types of referenced assemblies that
-    /// wrote complete summaries. Split by what their syntax allows, so a call does not make the compiler resolve the
-    /// base types or build the members of every type: an interface call can only land in a type with a base list, a
-    /// virtual call only in a type that declares an override.
+    /// The types an interface or virtual call can land in: the source types the syntax test allows, and the types of
+    /// referenced assemblies that wrote complete summaries. The test keeps a call from making the compiler resolve the base
+    /// types or build the members of every type: an interface call can only land in a type with a base list, a virtual
+    /// call only in a type that declares an override. Collected only when needed: an interface call answered from the
+    /// interface map kept in <see cref="DeclarationFacts"/> never asks for them.
     /// </summary>
-    private DispatchCandidates CollectCandidateTypes()
+    /// <param name="mayLand">Whether a call can land in a source type, by its syntax.</param>
+    private ImmutableArray<INamedTypeSymbol> CollectCandidateTypes(Func<INamedTypeSymbol, bool> mayLand)
     {
-        var implementing = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
-        var overriding = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
+        var candidates = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
         foreach (var type in _sourceTypes.Value)
         {
-            if (Model.Symbols.MayDeriveOrImplement(type))
+            if (mayLand(type))
             {
-                implementing.Add(type);
-            }
-
-            if (Model.Symbols.MayOverride(type))
-            {
-                overriding.Add(type);
+                candidates.Add(type);
             }
         }
 
+        candidates.AddRange(_completeTypes.Value);
+        return candidates.ToImmutable();
+    }
+
+    /// <summary>The types of the referenced assemblies that wrote complete summaries: any call can land in them.</summary>
+    private ImmutableArray<INamedTypeSymbol> CollectCompleteTypes()
+    {
+        var types = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
         foreach (var assembly in _referenced.Value.CompleteAssemblies)
         {
-            var types = Model.Symbols.AllTypes(assembly.GlobalNamespace).ToList();
-            implementing.AddRange(types);
-            overriding.AddRange(types);
+            types.AddRange(Model.Symbols.AllTypes(assembly.GlobalNamespace));
         }
 
-        return new DispatchCandidates(implementing.ToImmutable(), overriding.ToImmutable());
+        return types.ToImmutable();
     }
 
     /// <summary>Replaces parameter sources in a callee's arguments with the caller's arguments.</summary>
@@ -1151,11 +1159,6 @@ internal sealed class Session
     /// <param name="known">A known symbol, possibly missing.</param>
     private static bool Is(INamedTypeSymbol? type, INamedTypeSymbol? known)
         => type is not null && known is not null && SymbolEqualityComparer.Default.Equals(type, known);
-
-    /// <summary>The types a dispatched call can land in.</summary>
-    /// <param name="Implementing">The types that may implement an interface.</param>
-    /// <param name="Overriding">The types that may override a virtual member.</param>
-    private sealed record DispatchCandidates(ImmutableArray<INamedTypeSymbol> Implementing, ImmutableArray<INamedTypeSymbol> Overriding);
 
     /// <summary>The key of a cached witness search.</summary>
     /// <param name="Method">The method called.</param>

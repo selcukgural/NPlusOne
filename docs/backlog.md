@@ -525,9 +525,13 @@ In the IDE, a declaration edit costs four times a body edit.
   cache the facts of referenced assemblies per `IAssemblySymbol` in a `ConditionalWeakTable`. Scan for entity roots only
   in assemblies that reference EF Core or ABP. `IncrementalTests` cases: a signature edit, an added property on an
   entity, an edit in a referenced project. Target: a declaration keystroke close to a body keystroke.
-- **A2. Candidate types only on a miss.** `Implementers` and `MediatorTypes` read `_candidateTypes.Value` before asking
-  the cached interface map, so every interface or mediator call collects every candidate type. Pass it lazily; split the
-  implementing and overriding candidates.
+- ~~**A2. Candidate types only on a miss.**~~ (done 2026-10-15) `Implementers` and `MediatorTypes` read the candidate
+  types before asking the cached interface map, so every interface or mediator call collected them (every source type
+  bound, the members of each scanned for `override`). `DeclarationFacts.Implementers` and `ImplementersOfAny` take them as
+  a function, called only to build the map or when it cannot answer; the implementing and overriding candidates are
+  collected apart, and the types of complete referenced assemblies once for both. `KeystrokeBenchmarks`, 1,000 modules:
+  44.8 → 44.3 MB for a body edit, 162.0 → 158.2 MB for a declaration edit (times not comparable: the machine was
+  loaded). Same findings on the corpus, the ground truth and `IncrementalTests`.
 - **A3. Arguments traced only when used.** `OnInvocation` traces every argument of every call before it knows whether the
   call is in a loop; outside a loop only a call to the method itself uses them. Trace them in the two branches that need
   them, and find the method's direct query once per block.

@@ -130,17 +130,20 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
     /// declarations; each compilation then resolves only the implementers it asks for.
     /// </summary>
     /// <param name="compilation">The compilation.</param>
-    /// <param name="candidates">The types an interface call can land in, the same for every compilation with these declarations.</param>
+    /// <param name="candidates">
+    /// The types an interface call can land in, the same for every compilation with these declarations; asked for only to
+    /// build the map or when the map cannot answer, since collecting them binds every source type.
+    /// </param>
     /// <param name="iface">The interface definition.</param>
-    public ImmutableArray<INamedTypeSymbol> Implementers(Compilation compilation, ImmutableArray<INamedTypeSymbol> candidates, INamedTypeSymbol iface)
+    public ImmutableArray<INamedTypeSymbol> Implementers(Compilation compilation, Func<ImmutableArray<INamedTypeSymbol>> candidates, INamedTypeSymbol iface)
     {
         if (InterfacesOf(compilation, candidates) is not { } map || TypeName.Of(compilation, iface) is not { } name)
         {
-            return Implementing(candidates, implemented => SymbolEqualityComparer.Default.Equals(implemented, iface));
+            return Implementing(candidates(), implemented => SymbolEqualityComparer.Default.Equals(implemented, iface));
         }
 
         return map.Implementers.TryGetValue(name, out var positions)
-            ? map.Resolve(compilation, positions) ?? Implementing(candidates, implemented => SymbolEqualityComparer.Default.Equals(implemented, iface))
+            ? map.Resolve(compilation, positions) ?? Implementing(candidates(), implemented => SymbolEqualityComparer.Default.Equals(implemented, iface))
             : ImmutableArray<INamedTypeSymbol>.Empty;
     }
 
@@ -149,15 +152,15 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
     /// handlers), in candidate order; mapped once like <see cref="Implementers"/>.
     /// </summary>
     /// <param name="compilation">The compilation.</param>
-    /// <param name="candidates">The types to look at, the same for every compilation with these declarations.</param>
+    /// <param name="candidates">The types to look at, the same for every compilation with these declarations; asked for as in <see cref="Implementers"/>.</param>
     /// <param name="ns">The interfaces' namespace.</param>
     /// <param name="names">The interfaces' names, without arity.</param>
-    public ImmutableArray<INamedTypeSymbol> ImplementersOfAny(Compilation compilation, ImmutableArray<INamedTypeSymbol> candidates, string ns, ImmutableHashSet<string> names)
+    public ImmutableArray<INamedTypeSymbol> ImplementersOfAny(Compilation compilation, Func<ImmutableArray<INamedTypeSymbol>> candidates, string ns, ImmutableHashSet<string> names)
     {
         bool Wanted(INamedTypeSymbol implemented) => names.Contains(implemented.Name) && implemented.ContainingNamespace?.ToDisplayString() == ns;
         if (InterfacesOf(compilation, candidates) is not { } map)
         {
-            return Implementing(candidates, Wanted);
+            return Implementing(candidates(), Wanted);
         }
 
         var positions = new SortedSet<int>();
@@ -169,7 +172,7 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
             }
         }
 
-        return map.Resolve(compilation, positions) ?? Implementing(candidates, Wanted);
+        return map.Resolve(compilation, positions) ?? Implementing(candidates(), Wanted);
     }
 
     /// <summary>Whether a metadata name (<c>MediatR.IRequestHandler`2</c>) is of a namespace and one of the names.</summary>
@@ -212,14 +215,14 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
 
     /// <summary>The interface map, built on first use by one thread while the others wait; null when a candidate cannot be named.</summary>
     /// <param name="compilation">The compilation.</param>
-    /// <param name="candidates">The candidates.</param>
-    private InterfaceMap? InterfacesOf(Compilation compilation, ImmutableArray<INamedTypeSymbol> candidates)
+    /// <param name="candidates">The candidates, asked for only when the map is built.</param>
+    private InterfaceMap? InterfacesOf(Compilation compilation, Func<ImmutableArray<INamedTypeSymbol>> candidates)
     {
         lock (_interfacesGate)
         {
             if (_interfaces is null && !_interfacesUnnamed)
             {
-                _interfaces = InterfaceMap.Build(compilation, candidates);
+                _interfaces = InterfaceMap.Build(compilation, candidates());
                 _interfacesUnnamed = _interfaces is null;
             }
 
