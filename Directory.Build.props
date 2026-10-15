@@ -39,7 +39,7 @@
 
   <!-- Package metadata shared by every published package. -->
   <PropertyGroup>
-    <VersionPrefix>1.0.0</VersionPrefix>
+    <VersionPrefix>1.1.0</VersionPrefix>
     <PackageIcon>icon.png</PackageIcon>
     <Authors>Selçuk GÜRAL</Authors>
     <Copyright>Copyright (c) 2026 Selçuk GÜRAL</Copyright>
