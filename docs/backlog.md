@@ -386,8 +386,8 @@ assigned source is never read half-built by another thread. Counter-checks `tool
   `;` in a tag adds properties) and released a tagged commit from any branch. It now accepts only `v1.2.3` or
   `v1.2.3-suffix` and a commit on `main` (full history checked out). Every job has a `timeout-minutes`. `SECURITY.md`
   says how to report privately (GitHub's private vulnerability reporting is on) and what counts. Repository settings
-  checked: the `nuget` environment needs a reviewer and deploys only from `v*` tags, Pages only from `main`; no ruleset
-  protects `v*` tags yet.
+  checked: the `nuget` environment needs a reviewer and deploys only from `v*` tags, Pages only from `main`; the
+  "Release tags" ruleset lets only repository admins create, move or delete `v*` tags.
 - ~~**Forged summaries.**~~ (done 2026-10-15) Summaries are read from every referenced assembly, so any package can
   carry any text there. An effect line with an empty source field made `SummaryExport.Decode` throw (AD0001, which fails
   builds that treat warnings as errors), and an undefined shape number was taken as a shape. Such lines are now skipped.
