@@ -1,0 +1,26 @@
+[
+  {
+    "name": "A pattern without a timeout gets one",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/ScopeSettings.cs",
+    "old": "pattern.MatchTimeout != Regex.InfiniteMatchTimeout\n            ? pattern",
+    "new": "pattern.MatchTimeout == pattern.MatchTimeout\n            ? pattern"
+  },
+  {
+    "name": "A pattern with its own timeout is used as it is",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/ScopeSettings.cs",
+    "old": "pattern.MatchTimeout != Regex.InfiniteMatchTimeout\n            ? pattern",
+    "new": "pattern.MatchTimeout == TimeSpan.Zero\n            ? pattern"
+  },
+  {
+    "name": "The bounded copy is built once, not per scope",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/ScopeSettings.cs",
+    "old": ": Bounded.GetValue(pattern, static p => new Regex(p.ToString(), p.Options, PatternTimeout));",
+    "new": ": new Regex(pattern.ToString(), pattern.Options, PatternTimeout) ?? Bounded.GetValue(pattern, static p => p);"
+  },
+  {
+    "name": "The copy keeps the pattern's options",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/ScopeSettings.cs",
+    "old": "new Regex(p.ToString(), p.Options, PatternTimeout)",
+    "new": "new Regex(p.ToString(), RegexOptions.None, PatternTimeout)"
+  }
+]

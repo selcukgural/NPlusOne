@@ -33,6 +33,8 @@
   hidden like any other literal, and SQL Server's and SQLite's `LIKE ... ESCAPE '\'` no longer hides the rest of the
   query.
 - New option `AssertThrowsInProduction` (default `false`), read by the ASP.NET Core assert filters.
+- An `IgnoredSqlPatterns` regex without a timeout of its own stops after 100 ms on a command (that command is then not
+  recorded), so a pattern that backtracks on SQL with inlined values cannot hold the request.
 
 **`NPlusOne.AspNetCore`**
 

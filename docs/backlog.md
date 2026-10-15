@@ -375,6 +375,13 @@ assigned source is never read half-built by another thread. Counter-checks `tool
   Development and Staging throw; red before, 2 failures). Counter-check `tools/countercheck/33-production-asserts.json`
   (run with `--project tests/NPlusOne.AspNetCore.Tests --filter FullyQualifiedName~NPlusOne.AspNetCore.Tests`): all 6
   parts red when undone.
+- ~~**Bounded ignored patterns.**~~ (done 2026-10-15) `IgnoredSqlPatterns` ran on the SQL text with whatever timeout
+  the application gave them, usually none; the text can carry values inlined into it (`EF.Constant`, raw SQL), so a
+  pattern that backtracks could hold the request's thread. `ScopeSettings.From` now uses a copy that stops after
+  100 ms for a pattern without a timeout of its own (built once per pattern in a `ConditionalWeakTable`, not on every
+  scope), and the interceptor already drops a record whose match throws. Tests: `ScopeSettingsTests` (red before;
+  the backtracking case hangs before the fix, so it runs 30 characters, seconds without a timeout). Counter-check
+  `tools/countercheck/34-pattern-timeout.json` (same `--project` and `--filter` as 32): all 4 parts red when undone.
 - **ABP samples.** Scanned 2026-10-13, see item 8: the scan found nothing because the analyzer could not see ABP code.
 - **GraphQL resolvers (catalogue C24).** Hot Chocolate type-extension resolvers taking `[Parent]` run once per parent
   without a DataLoader; see what the analyzer misses there and decide whether to follow them before Dapper and ADO.NET.

@@ -116,7 +116,7 @@ async-local read per command and return.
 | `RepeatThreshold` | `2` | A group that runs **more** than this many times in one scope is a suspect. At least 1. |
 | `ThrowOnViolation` | `false` | Middleware throws instead of logging a warning (see above). Manual scopes ignore it; call `AssertNoNPlusOne()`. |
 | `AssertThrowsInProduction` | `false` | The assert filters throw in the Production environment too, instead of logging a warning (see above). |
-| `IgnoredSqlPatterns` | empty | `Regex`es matched against the SQL as EF Core sends it; matching commands are not recorded. |
+| `IgnoredSqlPatterns` | empty | `Regex`es matched against the SQL as EF Core sends it; matching commands are not recorded. The SQL can carry inlined values, so a pattern without a timeout of its own stops after 100 ms on a command, and that command is then not recorded. |
 | `IncludeWrites` | `false` | Also record `SaveChanges`, `ExecuteUpdate`, `ExecuteDelete` and `ExecuteSql` commands and the transactions the code starts, so a `SaveChanges` or a `BeginTransaction` per element is reported. One `SaveChanges` call counts once, however many statements it sends (and the transaction it opens is part of it). |
 | `CaptureCallSite` | `true` | Group by call site as well as SQL, and show it. Off: group by SQL only, a little faster. |
 | `MaxSqlPreviewLength` | `300` | Normalized SQL longer than this is cut and ends with `...`. At least 20. |

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
 namespace NPlusOne.EntityFrameworkCore.Recording;
@@ -18,20 +19,43 @@ internal sealed record ScopeSettings(
     int MaxSqlPreviewLength,
     Regex[] IgnoredSqlPatterns)
 {
+    /// <summary>
+    /// How long an ignored pattern without a timeout of its own may run on one command. The patterns run on the SQL text,
+    /// which can carry values inlined into it (<c>EF.Constant</c>, raw SQL): a pattern that backtracks must not hold the
+    /// thread of the request it observes. A match that times out drops that one record (see the interceptor).
+    /// </summary>
+    internal static readonly TimeSpan PatternTimeout = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// The bounded copy of each pattern without a timeout, built once per pattern instance rather than once per scope,
+    /// since a scope begins on every request and building a <see cref="Regex"/> parses it again.
+    /// </summary>
+    private static readonly ConditionalWeakTable<Regex, Regex> Bounded = [];
+
     /// <summary>Copies and validates the options.</summary>
     /// <param name="options">The options to copy.</param>
     /// <returns>The snapshot.</returns>
     /// <exception cref="ArgumentException">An ignored pattern is <see langword="null"/>.</exception>
     public static ScopeSettings From(NPlusOneOptions options)
     {
-        Regex[] patterns = [.. options.IgnoredSqlPatterns];
-        if (Array.IndexOf(patterns, null) >= 0)
+        var patterns = new Regex[options.IgnoredSqlPatterns.Count];
+        for (var i = 0; i < patterns.Length; i++)
         {
-            throw new ArgumentException("IgnoredSqlPatterns must not contain null.", nameof(options));
+            patterns[i] = options.IgnoredSqlPatterns[i] is { } pattern
+                ? Bound(pattern)
+                : throw new ArgumentException("IgnoredSqlPatterns must not contain null.", nameof(options));
         }
 
         return new ScopeSettings(options.RepeatThreshold, options.IncludeWrites, options.CaptureCallSite, options.MaxSqlPreviewLength, patterns);
     }
+
+    /// <summary>The pattern itself when it has a timeout, otherwise a copy that stops after <see cref="PatternTimeout"/>.</summary>
+    /// <param name="pattern">An ignored pattern from the options.</param>
+    /// <returns>A pattern with a finite match timeout.</returns>
+    private static Regex Bound(Regex pattern) =>
+        pattern.MatchTimeout != Regex.InfiniteMatchTimeout
+            ? pattern
+            : Bounded.GetValue(pattern, static p => new Regex(p.ToString(), p.Options, PatternTimeout));
 
     /// <summary>Whether a command of this kind and text is recorded by the scope.</summary>
     /// <param name="kind">Query or write.</param>

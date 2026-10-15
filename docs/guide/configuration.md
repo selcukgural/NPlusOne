@@ -51,7 +51,7 @@ Passed to `NPlusOneGuard.Begin(o => ...)` for a manual scope, or to `AddNPlusOne
 |---|---|---|
 | `RepeatThreshold` | `2` | A group (same normalized SQL, or same lazy-loaded navigation, from the same call site) that runs more often than this in one scope is a suspect. |
 | `IncludeWrites` | `false` | Also report `SaveChanges`, `ExecuteUpdate`, `ExecuteDelete`, `ExecuteSql` and transactions started per element. One `SaveChanges` counts once however many rows it writes. |
-| `IgnoredSqlPatterns` | empty | Regular expressions; commands whose SQL matches are not recorded. |
+| `IgnoredSqlPatterns` | empty | Regular expressions; commands whose SQL matches are not recorded. A pattern without a timeout of its own stops after 100 ms. |
 | `CaptureCallSite` | `true` | Group by call site as well as SQL, and show where to look. |
 | `ThrowOnViolation` | `false` | ASP.NET Core middleware: throw instead of logging, while the response has not started. |
 | `AssertThrowsInProduction` | `false` | ASP.NET Core assert filters: throw in the Production environment too, instead of logging a warning. |
