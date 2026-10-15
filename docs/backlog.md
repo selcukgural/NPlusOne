@@ -382,6 +382,12 @@ assigned source is never read half-built by another thread. Counter-checks `tool
   scope), and the interceptor already drops a record whose match throws. Tests: `ScopeSettingsTests` (red before;
   the backtracking case hangs before the fix, so it runs 30 characters, seconds without a timeout). Counter-check
   `tools/countercheck/34-pattern-timeout.json` (same `--project` and `--filter` as 32): all 4 parts red when undone.
+- ~~**Release and CI hardening.**~~ (done 2026-10-15) The release job passed any tag to MSBuild as `-p:Version=` (a
+  `;` in a tag adds properties) and released a tagged commit from any branch. It now accepts only `v1.2.3` or
+  `v1.2.3-suffix` and a commit on `main` (full history checked out). Every job has a `timeout-minutes`. `SECURITY.md`
+  says how to report privately (GitHub's private vulnerability reporting is on) and what counts. Repository settings
+  checked: the `nuget` environment needs a reviewer and deploys only from `v*` tags, Pages only from `main`; no ruleset
+  protects `v*` tags yet.
 - **ABP samples.** Scanned 2026-10-13, see item 8: the scan found nothing because the analyzer could not see ABP code.
 - **GraphQL resolvers (catalogue C24).** Hot Chocolate type-extension resolvers taking `[Parent]` run once per parent
   without a DataLoader; see what the analyzer misses there and decide whether to follow them before Dapper and ADO.NET.
