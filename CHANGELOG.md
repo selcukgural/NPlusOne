@@ -24,6 +24,11 @@
 - An override that queries and then calls `base.Method(...)` is no longer reported as recursive (NP0004).
 - A `base.Method(...)` call runs only the base implementation: in a loop it is reported when the base queries or reads
   a navigation, not when only an override does (NP0001, NP0002), and a query it returns keeps the base's includes.
+- A local declared `null` and filled later (`List<Order> orders = null; orders ??= query.ToList();`) keeps the query
+  as its source, so lazy loads on its elements are reported.
+- Less work per keystroke: interface calls no longer collect every candidate type when the cached map answers, call
+  arguments are traced only where they are used, lazy-load checks are skipped in projects without lazy loading, and the
+  walks over a whole method are made once per method instead of once per question.
 - A referenced assembly whose method summaries are broken (an empty or unknown field) no longer makes the analyzer
   throw (AD0001); the broken lines are skipped.
 

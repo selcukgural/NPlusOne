@@ -537,15 +537,20 @@ In the IDE, a declaration edit costs four times a body edit.
   traced in the loop branch and for a call to the method itself, and the method's own direct query is found once per
   block instead of once per call. Not measured yet (timings are taken later, on an idle machine); same findings on the
   corpus and `IncrementalTests`.
-- **A4. One walk per method, and none without lazy loading.** `TraceLocal`, `SingleInitializer`, `AssignedValues`,
-  `LoopDeclaring`, `LazyLoadingTurnedOffBefore`, `LoadedExplicitlyBefore` and `RequestType` each walk the whole method on
-  every call, so large methods are quadratic. Build one index per root in one walk (declarators, assignments, the
-  `foreach` declaring each local, the first `LazyLoadingEnabled = false`, explicit loads). The lazy-load checks
-  (`CheckInstanceMember`, `CheckElementArgument`, `CheckSequenceArguments`, parts of `CheckMethodGroups` and
-  `CheckClientProjection`) can never report without lazy loading: return first when `AnyLazyLoading` is false.
-  - ~~Lazy-load checks without lazy loading~~ (done 2026-10-15): a navigation is lazy only with proxies or an entity that
-    takes a lazy loader, which is what `AnyLazyLoading` answers, so those checks (and `CheckMapperArguments`) now return
-    first without it. The walk index is still to do.
+- ~~**A4. One walk per method, and none without lazy loading.**~~ (done 2026-10-15) `TraceLocal`, `SingleInitializer`,
+  `AssignedValues`, `LoopDeclaring`, `LazyLoadingTurnedOffBefore`, `LoadedExplicitlyBefore` and `RequestType` each walked
+  the whole method on every call, so large methods were quadratic.
+  - Lazy-load checks without lazy loading: a navigation is lazy only with proxies or an entity that takes a lazy loader,
+    which is what `AnyLazyLoading` answers, so `CheckInstanceMember`, `CheckElementArgument`, `CheckSequenceArguments`,
+    `CheckMapperArguments` and the lazy parts of `CheckMethodGroups` and `CheckClientProjection` return first without it.
+  - `OperationIndex` walks a tree once and keeps, per local, the operations that may write it (declarators, plain and
+    `??=` assignments, the `foreach` loops and deconstructions declaring it), the first `LazyLoadingEnabled = false` and
+    the explicit loads; it is kept per root in a `ConditionalWeakTable`, and every question still tests the operations
+    with its own conditions. The counter-check found that plain and `??=` assignments to a local and deconstructions
+    had no corpus case: `corpus/Lazy/AssignedLocals.cs` adds them, and with them a miss: a local declared `= null` and
+    filled with `??=` from a query was untraced, because the `null` made its source unknown. A `null` initializer now
+    holds no elements (`SourceTracer.IsNull`).
+  - Counter-check `tools/countercheck/38-operation-index.json`: all 8 parts red when undone. Not measured yet.
 - **A5. Bounded call-graph searches.** `Session.Reaches` and `CollectNavigationReads` explore every path to the depth
   limit with no visited set. Search breadth first with a visited set (a shorter path leaves more depth), and cache
   `NavigationReadsOf`.

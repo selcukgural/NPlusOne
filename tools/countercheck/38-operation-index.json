@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Declarators are writes",
+    "file": "src/NPlusOne.Analyzers/Analysis/OperationIndex.cs",
+    "old": "                    Add(declarator.Symbol, declarator);\n",
+    "new": "\n"
+  },
+  {
+    "name": "Assignments to a local are writes",
+    "file": "src/NPlusOne.Analyzers/Analysis/OperationIndex.cs",
+    "old": "                    Add(target.Local, assignment);\n",
+    "new": "\n"
+  },
+  {
+    "name": "Coalescing assignments are writes",
+    "file": "src/NPlusOne.Analyzers/Analysis/OperationIndex.cs",
+    "old": "                    Add(target.Local, coalesce);\n",
+    "new": "\n"
+  },
+  {
+    "name": "A foreach writes the locals it declares",
+    "file": "src/NPlusOne.Analyzers/Analysis/OperationIndex.cs",
+    "old": "                        Add(local, loop);\n",
+    "new": "\n"
+  },
+  {
+    "name": "Deconstructions and declaration expressions write what they declare",
+    "file": "src/NPlusOne.Analyzers/Analysis/OperationIndex.cs",
+    "old": "                    AddDeclared(operation);\n",
+    "new": "\n"
+  },
+  {
+    "name": "Lazy loading turned off is found",
+    "file": "src/NPlusOne.Analyzers/Analysis/OperationIndex.cs",
+    "old": "                    LazyLoadingOff = Math.Min(LazyLoadingOff, assignment.Syntax.SpanStart);\n",
+    "new": "\n"
+  },
+  {
+    "name": "Explicit loads are found",
+    "file": "src/NPlusOne.Analyzers/Analysis/OperationIndex.cs",
+    "old": "                    _explicitLoads.Add(invocation);\n",
+    "new": "\n"
+  },
+  {
+    "name": "A null initializer holds no elements",
+    "file": "src/NPlusOne.Analyzers/Analysis/SourceTracer.cs",
+    "old": "is { } initializer && !IsNull(initializer.Value))",
+    "new": "is { } initializer)"
+  }
+]

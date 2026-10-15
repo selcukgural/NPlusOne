@@ -289,12 +289,12 @@ internal sealed class SourceTracer(Session session, IMethodSymbol? owner)
 
         _locals[local] = SourceInfo.Pending;
         var result = SourceInfo.Pending;
-        foreach (var operation in Operations.Root(reference).Descendants())
+        foreach (var operation in OperationIndex.Of(reference).WritesOf(local))
         {
             switch (operation)
             {
                 case IVariableDeclaratorOperation declarator when SymbolEqualityComparer.Default.Equals(declarator.Symbol, local):
-                    if (declarator.GetVariableInitializer() is { } initializer)
+                    if (declarator.GetVariableInitializer() is { } initializer && !IsNull(initializer.Value))
                     {
                         result = result.Combine(Trace(initializer.Value, depth));
                     }
@@ -396,6 +396,13 @@ internal sealed class SourceTracer(Session session, IMethodSymbol? owner)
     /// <param name="local">The local.</param>
     private static bool IsLocal(IOperation target, ILocalSymbol local)
         => target is ILocalReferenceOperation reference && SymbolEqualityComparer.Default.Equals(reference.Local, local);
+
+    /// <summary>
+    /// Whether a value is <c>null</c> (or <c>default</c> of a reference type): it holds no elements, so it says nothing about
+    /// where the local's elements come from (<c>List&lt;Order&gt; orders = null; orders ??= query.ToList();</c>).
+    /// </summary>
+    /// <param name="value">The value assigned.</param>
+    private static bool IsNull(IOperation value) => Operations.StripConversions(value) is { ConstantValue: { HasValue: true, Value: null } };
 
     /// <summary>Whether a deconstruction or declaration expression declares or assigns the local.</summary>
     /// <param name="operation">The operation.</param>

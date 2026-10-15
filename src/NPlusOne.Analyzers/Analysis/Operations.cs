@@ -60,7 +60,7 @@ internal static class Operations
     public static ImmutableArray<IOperation> AssignedValues(ILocalSymbol local, IOperation anyOperation)
     {
         var values = ImmutableArray.CreateBuilder<IOperation>();
-        foreach (var descendant in Root(anyOperation).Descendants())
+        foreach (var descendant in OperationIndex.Of(anyOperation).WritesOf(local))
         {
             var value = descendant switch
             {
@@ -136,7 +136,7 @@ internal static class Operations
     {
         IOperation? initializer = null;
         var assignments = 0;
-        foreach (var descendant in Root(reference).Descendants())
+        foreach (var descendant in OperationIndex.Of(reference).WritesOf(reference.Local))
         {
             switch (descendant)
             {

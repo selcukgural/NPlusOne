@@ -333,7 +333,7 @@ internal sealed class Session
         }
 
         ITypeSymbol? assigned = null;
-        foreach (var operation in Operations.Root(argument).Descendants())
+        foreach (var operation in OperationIndex.Of(argument).WritesOf(local))
         {
             var stored = operation switch
             {

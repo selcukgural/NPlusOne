@@ -127,7 +127,7 @@ internal static class ElementParts
     /// <param name="anyOperation">Any operation of the method the local belongs to.</param>
     public static IForEachLoopOperation? LoopDeclaring(ILocalSymbol local, IOperation anyOperation)
     {
-        foreach (var operation in Operations.Root(anyOperation).Descendants())
+        foreach (var operation in OperationIndex.Of(anyOperation).WritesOf(local))
         {
             if (operation is IForEachLoopOperation { LoopControlVariable: IVariableDeclaratorOperation declarator } loop
                 && SymbolEqualityComparer.Default.Equals(declarator.Symbol, local))

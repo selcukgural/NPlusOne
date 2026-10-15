@@ -1179,9 +1179,9 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
         }
 
         var position = read.Syntax.SpanStart;
-        foreach (var descendant in Operations.Root(read).Descendants())
+        foreach (var invocation in OperationIndex.Of(read).ExplicitLoads)
         {
-            if (descendant is not IInvocationOperation invocation || invocation.Syntax.SpanStart >= position)
+            if (invocation.Syntax.SpanStart >= position)
             {
                 continue;
             }
@@ -1222,19 +1222,7 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
     /// </summary>
     /// <param name="operation">A navigation read or a call that leads to one.</param>
     private static bool LazyLoadingTurnedOffBefore(IOperation operation)
-    {
-        var position = operation.Syntax.SpanStart;
-        foreach (var descendant in Operations.Root(operation).Descendants())
-        {
-            if (descendant is ISimpleAssignmentOperation { Target: IPropertyReferenceOperation { Property.Name: "LazyLoadingEnabled" }, Value.ConstantValue: { HasValue: true, Value: false } } assignment
-                && assignment.Syntax.SpanStart < position)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+        => OperationIndex.Of(operation).LazyLoadingOff < operation.Syntax.SpanStart;
 
     /// <summary>
     /// Removes conversions and result wrappers (<c>Ok</c>, <c>Json</c>, <c>TypedResults.Ok</c>,
