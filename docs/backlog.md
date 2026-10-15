@@ -532,9 +532,11 @@ In the IDE, a declaration edit costs four times a body edit.
   collected apart, and the types of complete referenced assemblies once for both. `KeystrokeBenchmarks`, 1,000 modules:
   44.8 → 44.3 MB for a body edit, 162.0 → 158.2 MB for a declaration edit (times not comparable: the machine was
   loaded). Same findings on the corpus, the ground truth and `IncrementalTests`.
-- **A3. Arguments traced only when used.** `OnInvocation` traces every argument of every call before it knows whether the
-  call is in a loop; outside a loop only a call to the method itself uses them. Trace them in the two branches that need
-  them, and find the method's direct query once per block.
+- ~~**A3. Arguments traced only when used.**~~ (done 2026-10-15) `OnInvocation` traced every argument of every call
+  before it knew whether the call was in a loop; outside a loop only a call to the method itself uses them. They are now
+  traced in the loop branch and for a call to the method itself, and the method's own direct query is found once per
+  block instead of once per call. Not measured yet (timings are taken later, on an idle machine); same findings on the
+  corpus and `IncrementalTests`.
 - **A4. One walk per method, and none without lazy loading.** `TraceLocal`, `SingleInitializer`, `AssignedValues`,
   `LoopDeclaring`, `LazyLoadingTurnedOffBefore`, `LoadedExplicitlyBefore` and `RequestType` each walk the whole method on
   every call, so large methods are quadratic. Build one index per root in one walk (declarators, assignments, the

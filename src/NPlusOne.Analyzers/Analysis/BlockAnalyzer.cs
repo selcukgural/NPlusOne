@@ -21,6 +21,12 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
     private readonly Dictionary<(IOperation Region, ISymbol Root, string Path), Diagnostic> _lazyLoads = [];
     private readonly object _gate = new();
 
+    /// <summary>The owner's own query (<see cref="OwnQuery"/>), valid once <see cref="_ownQueryFound"/> is 1.</summary>
+    private Witness? _ownQuery;
+
+    /// <summary>1 once <see cref="_ownQuery"/> is known; two callbacks finding it at once write the same answer.</summary>
+    private int _ownQueryFound;
+
     /// <summary>
     /// Whether the owner is an endpoint whose returned entities the serializer will walk: an MVC action, a
     /// SignalR hub method, or a method passed to a minimal API mapping as its handler. Only lazy loads make a
@@ -410,12 +416,13 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
 
         CheckSequenceArguments(invocation);
 
-        var arguments = TraceArguments(invocation);
         if (iteration is null)
         {
-            CheckRecursion(context, invocation, arguments);
+            CheckRecursion(context, invocation);
             return;
         }
+
+        var arguments = TraceArguments(invocation);
 
         var callee = Model.Symbols.Display(method);
         var location = Operations.ReportLocation(invocation);
@@ -834,8 +841,7 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
     /// <summary>NP0004: a direct recursive call from a method that runs a query on every call.</summary>
     /// <param name="context">The operation context.</param>
     /// <param name="invocation">The call, which is not inside an iteration.</param>
-    /// <param name="arguments">The traced arguments.</param>
-    private void CheckRecursion(OperationAnalysisContext context, IInvocationOperation invocation, ImmutableArray<SourceInfo> arguments)
+    private void CheckRecursion(OperationAnalysisContext context, IInvocationOperation invocation)
     {
         if (owner is not IMethodSymbol self)
         {
@@ -845,7 +851,8 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
         var callee = invocation.TargetMethod.OriginalDefinition;
         if (SymbolEqualityComparer.Default.Equals(callee, self.OriginalDefinition))
         {
-            if (session.FindWitness(self, arguments, EffectKind.Query) is { } witness)
+            // Only a call to the method itself needs its arguments traced, and outside a loop most calls are not one.
+            if (session.FindWitness(self, TraceArguments(invocation), EffectKind.Query) is { } witness)
             {
                 context.ReportDiagnostic(Diagnostic.Create(Descriptors.RecursiveQuery, Operations.ReportLocation(invocation), Messages.RecursiveQuery(Model.Symbols.Display(self), witness, null)));
             }
@@ -857,10 +864,25 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
         // call made by the method that runs the query itself. A non-virtual call (base.Get(id) in the override of
         // Get) runs only the callee's own body, never the overrides that dispatch would reach.
         var depth = session.Settings.MaxCallDepth;
-        if (DirectQuery(self) is { } own && session.Reaches(invocation, self, depth))
+        if (OwnQuery(self) is { } own && session.Reaches(invocation, self, depth))
         {
             context.ReportDiagnostic(Diagnostic.Create(Descriptors.RecursiveQuery, Operations.ReportLocation(invocation), Messages.RecursiveQuery(Model.Symbols.Display(self), own, Model.Symbols.Display(callee))));
         }
+    }
+
+    /// <summary>
+    /// <see cref="DirectQuery"/> of the block's owner, found once per block: every call outside a loop asks for it.
+    /// </summary>
+    /// <param name="self">The owner.</param>
+    private Witness? OwnQuery(IMethodSymbol self)
+    {
+        if (Volatile.Read(ref _ownQueryFound) == 0)
+        {
+            _ownQuery = DirectQuery(self);
+            Volatile.Write(ref _ownQueryFound, 1);
+        }
+
+        return _ownQuery;
     }
 
     /// <summary>A query the method runs in its own body (not through calls), as a witness.</summary>
