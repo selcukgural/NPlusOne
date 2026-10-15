@@ -518,13 +518,20 @@ In the IDE, a declaration edit costs four times a body edit.
 
 ### Analyzer, per keystroke
 
-- **A1. Declaration edits keep the entity model.** `DeclarationFacts` is keyed by one hash of every declaration, so
-  typing a signature, a parameter or a `using` rebuilds entities (every type of every non-framework referenced assembly),
-  the interface map and every per-file answer. Key the entities and the interface map by a type-shape hash (namespaces,
-  usings, type headers, base lists, attributes, fields and properties), keep the full hash for the per-file answers, and
-  cache the facts of referenced assemblies per `IAssemblySymbol` in a `ConditionalWeakTable`. Scan for entity roots only
-  in assemblies that reference EF Core or ABP. `IncrementalTests` cases: a signature edit, an added property on an
-  entity, an edit in a referenced project. Target: a declaration keystroke close to a body keystroke.
+- **A1. Declaration edits keep the entity model.** `DeclarationFacts` was keyed by one hash of every declaration, so
+  typing a signature, a parameter or a `using` rebuilt entities (every type of every non-framework referenced assembly),
+  the interface map and every per-file answer.
+  - ~~Type shapes~~ (done 2026-10-15): `SyntaxIndex.Shape` hashes the declarations without methods, constructors,
+    destructors and operators, which neither the entities (base types, interfaces, properties, attributes) nor the
+    interface map read. The entities and the map live in `DeclarationFacts.ShapeFacts`, shared by the facts of every
+    compilation with the same shapes and references; the per-file answers stay keyed by the full hash.
+    `KeystrokeBenchmarks`, declaration edit: 158.2 → 72.7 MB at 1,000 modules (body edit 43.2 MB), 33.6 → 16.4 MB at
+    200; about 320 → 130 ms on a loaded machine. Tests: `IncrementalTests` (an entity set typed after a method; an
+    interface added to a class that queries, which a stale interface map would miss). Counter-check
+    `tools/countercheck/39-type-shapes.json` (`--filter FullyQualifiedName~IncrementalTests`): all 3 parts red when
+    undone.
+  - Still to do: cache the facts of referenced assemblies per `IAssemblySymbol` in a `ConditionalWeakTable`, and scan for
+    entity roots only in assemblies that reference EF Core or ABP; a `using` or a property edit still rebuilds the entities.
 - ~~**A2. Candidate types only on a miss.**~~ (done 2026-10-15) `Implementers` and `MediatorTypes` read the candidate
   types before asking the cached interface map, so every interface or mediator call collected them (every source type
   bound, the members of each scanned for `override`). `DeclarationFacts.Implementers` and `ImplementersOfAny` take them as

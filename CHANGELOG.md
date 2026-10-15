@@ -28,7 +28,9 @@
   as its source, so lazy loads on its elements are reported.
 - Less work per keystroke: interface calls no longer collect every candidate type when the cached map answers, call
   arguments are traced only where they are used, lazy-load checks are skipped in projects without lazy loading, and the
-  walks over a whole method are made once per method instead of once per question.
+  walks over a whole method are made once per method instead of once per question. Typing a method signature no longer
+  rebuilds the entity model and the interface map: in a generated project of 1,000 files, a declaration keystroke
+  allocates less than half of what it did.
 - A referenced assembly whose method summaries are broken (an empty or unknown field) no longer makes the analyzer
   throw (AD0001); the broken lines are skipped.
 

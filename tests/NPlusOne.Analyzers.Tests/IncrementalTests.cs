@@ -91,6 +91,21 @@ public class IncrementalTests
     }
 
     [Fact]
+    public async Task An_entity_set_added_after_a_method_was_typed_makes_its_type_an_entity()
+    {
+        // Typing a method keeps the type shapes, so the entities are reused; the entity set typed next changes them.
+        var withMethod = Context(OrdersContext[..^1] + "public int Count() => 0; }");
+        var withSet = withMethod.Replace("public int Count()", "public DbSet<Note> Notes { get; set; } public int Count()");
+        var compilation = Compile(("Model.cs", Model), ("Context.cs", Context(OrdersContext)), ("Notes.cs", NotesService));
+        Assert.Empty(await AnalyzeAsync(compilation));
+
+        var typed = Edit(compilation, "Context.cs", withMethod);
+        Assert.Empty(await AnalyzeAsync(typed));
+
+        Assert.Equal(["Notes.cs:10 NP0002"], await AnalyzeAsync(Edit(typed, "Context.cs", withSet)));
+    }
+
+    [Fact]
     public async Task An_entity_mapped_in_a_model_creating_body_makes_its_type_an_entity()
     {
         // The edit is inside a method body, so the file's declarations stay the same.
@@ -122,6 +137,25 @@ public class IncrementalTests
         Assert.Equal(["Pricing.cs:10 NP0001"], await AnalyzeAsync(compilation));
 
         Assert.Empty(await AnalyzeAsync(Edit(compilation, "Pricers.cs", after)));
+    }
+
+    [Fact]
+    public async Task An_interface_added_to_a_class_that_queries_makes_the_calls_through_it_query()
+    {
+        const string before = """
+            namespace Shop;
+
+            public interface IPricer { int Price(int id); }
+
+            public class DbPricer(ShopDb db) { public int Price(int id) => db.Orders.Count(o => o.CustomerId == id); }
+
+            public class FixedPricer : IPricer { public int Price(int id) => id; }
+            """;
+        var after = before.Replace("DbPricer(ShopDb db)", "DbPricer(ShopDb db) : IPricer");
+        var compilation = Compile(("Model.cs", Model), ("Context.cs", Context(OrdersContext)), ("Pricers.cs", before), ("Pricing.cs", PricingService));
+        Assert.Empty(await AnalyzeAsync(compilation));
+
+        Assert.Equal(["Pricing.cs:10 NP0001"], await AnalyzeAsync(Edit(compilation, "Pricers.cs", after)));
     }
 
     [Fact]

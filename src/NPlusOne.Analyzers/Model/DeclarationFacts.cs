@@ -12,10 +12,13 @@ namespace NPlusOne.Analyzers.Model;
 /// declarations and references. Finding these resolves the base types of every type and binds whole files, work an IDE
 /// would otherwise repeat on every keystroke; typing in a method body changes neither the declarations
 /// (<see cref="SyntaxIndex.Declarations"/>) nor the references, and leaves the trees of the other files as they were.
+/// The entities and the interface map depend on less: the type shapes (<see cref="SyntaxIndex.Shape"/>). They are kept
+/// in <see cref="ShapeFacts"/>, shared by facts whose declarations differ only in methods, so typing a signature keeps them.
 /// </summary>
 /// <param name="declarations">The hash of the compilation's declarations.</param>
+/// <param name="shape">What the compilations with the same type shapes and references share.</param>
 /// <param name="references">The referenced assemblies, held weakly so the cache keeps no compilation alive.</param>
-internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakReference<IAssemblySymbol>> references)
+internal sealed class DeclarationFacts(long declarations, DeclarationFacts.ShapeFacts shape, ImmutableArray<WeakReference<IAssemblySymbol>> references)
 {
     /// <summary>The compilations remembered per assembly name: a project built for several target frameworks has one each.</summary>
     private const int EntriesPerAssembly = 4;
@@ -26,20 +29,11 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
     private static readonly object Gate = new();
     private static readonly Dictionary<string, List<DeclarationFacts>> Remembered = new(StringComparer.Ordinal);
 
-    /// <summary>The entities, once found and named, with the types the model configuration mapped when they were; null until then.</summary>
-    private volatile NamedEntities? _entities;
+    /// <summary>The hash of the declarations these facts are for.</summary>
+    private long DeclarationsHash { get; } = declarations;
 
-    /// <summary>Whether an entity cannot be named (a type parameter), so the entities are collected for each compilation.</summary>
-    private volatile bool _entitiesUnnamed;
-
-    /// <summary>Serializes building <see cref="_interfaces"/>: it binds the base types of every candidate, once.</summary>
-    private readonly object _interfacesGate = new();
-
-    /// <summary>The interfaces of the candidate types of interface calls, once mapped.</summary>
-    private InterfaceMap? _interfaces;
-
-    /// <summary>Whether a candidate cannot be named, so implementers are found for each compilation.</summary>
-    private bool _interfacesUnnamed;
+    /// <summary>The facts shared with the compilations that have the same type shapes and references.</summary>
+    private ShapeFacts Shape { get; } = shape;
 
     /// <summary>The answers of <see cref="ForTree{T}"/>, by tree and question; released with the tree.</summary>
     private readonly ConditionalWeakTable<SyntaxTree, ConcurrentDictionary<string, object?>> _trees = new();
@@ -49,17 +43,28 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
     public static DeclarationFacts For(Compilation compilation)
     {
         var assemblyName = compilation.AssemblyName ?? string.Empty;
-        var declarations = DeclarationsOf(compilation);
+        var (declarations, shapeHash) = DeclarationsOf(compilation);
         var references = compilation.SourceModule.ReferencedAssemblySymbols;
         lock (Gate)
         {
+            ShapeFacts? shape = null;
             if (Remembered.TryGetValue(assemblyName, out var entries))
             {
                 foreach (var entry in entries)
                 {
-                    if (entry.Matches(declarations, references))
+                    if (!entry.ReferencesMatch(references))
+                    {
+                        continue;
+                    }
+
+                    if (entry.DeclarationsHash == declarations)
                     {
                         return entry;
+                    }
+
+                    if (entry.Shape.Hash == shapeHash)
+                    {
+                        shape = entry.Shape;
                     }
                 }
             }
@@ -80,7 +85,7 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
                 weak.Add(new WeakReference<IAssemblySymbol>(reference));
             }
 
-            var facts = new DeclarationFacts(declarations, weak.MoveToImmutable());
+            var facts = new DeclarationFacts(declarations, shape ?? new ShapeFacts(shapeHash), weak.MoveToImmutable());
             if (entries.Count >= EntriesPerAssembly)
             {
                 entries.RemoveAt(0);
@@ -101,7 +106,7 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
     /// <param name="collect">Finds the entities.</param>
     public ImmutableHashSet<ITypeSymbol> Entities(Compilation compilation, ImmutableArray<TypeName>? configured, Func<ImmutableHashSet<ITypeSymbol>> collect)
     {
-        var known = _entities;
+        var known = Shape.Entities;
         if (known is not null && configured is { } mapped && known.Configured.SequenceEqual(mapped)
             && TypeName.Resolve(compilation, known.Entities) is { } types)
         {
@@ -109,15 +114,15 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
         }
 
         var entities = collect();
-        if (!_entitiesUnnamed && configured is { } named)
+        if (!Shape.EntitiesUnnamed && configured is { } named)
         {
             if (TypeName.Of(compilation, entities) is { } names)
             {
-                _entities = new NamedEntities(named, names);
+                Shape.Entities = new NamedEntities(named, names);
             }
             else
             {
-                _entitiesUnnamed = true;
+                Shape.EntitiesUnnamed = true;
             }
         }
 
@@ -218,27 +223,61 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
     /// <param name="candidates">The candidates, asked for only when the map is built.</param>
     private InterfaceMap? InterfacesOf(Compilation compilation, Func<ImmutableArray<INamedTypeSymbol>> candidates)
     {
-        lock (_interfacesGate)
+        lock (Shape.InterfacesGate)
         {
-            if (_interfaces is null && !_interfacesUnnamed)
+            if (Shape.Interfaces is null && !Shape.InterfacesUnnamed)
             {
-                _interfaces = InterfaceMap.Build(compilation, candidates());
-                _interfacesUnnamed = _interfaces is null;
+                Shape.Interfaces = InterfaceMap.Build(compilation, candidates());
+                Shape.InterfacesUnnamed = Shape.Interfaces is null;
             }
 
-            return _interfaces;
+            return Shape.Interfaces;
         }
+    }
+
+    /// <summary>
+    /// What depends only on the type shapes and the references: the entities and the interface map, shared by the facts
+    /// of every compilation with the same shapes and references.
+    /// </summary>
+    /// <param name="hash">The hash of the type shapes.</param>
+    internal sealed class ShapeFacts(long hash)
+    {
+        /// <summary>The hash of the type shapes these facts are for.</summary>
+        public long Hash { get; } = hash;
+
+        /// <summary>The entities, once found and named, with the types the model configuration mapped when they were; null until then.</summary>
+        public NamedEntities? Entities
+        {
+            get => Volatile.Read(ref field);
+            set => Volatile.Write(ref field, value);
+        }
+
+        /// <summary>Whether an entity cannot be named (a type parameter), so the entities are collected for each compilation.</summary>
+        public bool EntitiesUnnamed
+        {
+            get => Volatile.Read(ref field);
+            set => Volatile.Write(ref field, value);
+        }
+
+        /// <summary>Serializes building <see cref="Interfaces"/>: it binds the base types of every candidate, once.</summary>
+        public object InterfacesGate { get; } = new();
+
+        /// <summary>The interfaces of the candidate types of interface calls, once mapped; read and written under <see cref="InterfacesGate"/>.</summary>
+        public InterfaceMap? Interfaces { get; set; }
+
+        /// <summary>Whether a candidate cannot be named, so implementers are found for each compilation; under <see cref="InterfacesGate"/>.</summary>
+        public bool InterfacesUnnamed { get; set; }
     }
 
     /// <summary>The entities by name, and the types the model configuration mapped when they were found.</summary>
     /// <param name="Configured">The types <c>modelBuilder.Entity</c> calls mapped, in the order the files were read.</param>
     /// <param name="Entities">The entities.</param>
-    private sealed record NamedEntities(ImmutableArray<TypeName> Configured, ImmutableArray<TypeName> Entities);
+    internal sealed record NamedEntities(ImmutableArray<TypeName> Configured, ImmutableArray<TypeName> Entities);
 
     /// <summary>The candidates of an interface call by name, and for each interface the positions of the candidates implementing it.</summary>
     /// <param name="Types">The candidates, in order.</param>
     /// <param name="Implementers">For each interface definition, the positions of its implementers among the candidates, ascending.</param>
-    private sealed record InterfaceMap(ImmutableArray<TypeName> Types, Dictionary<TypeName, List<int>> Implementers)
+    internal sealed record InterfaceMap(ImmutableArray<TypeName> Types, Dictionary<TypeName, List<int>> Implementers)
     {
         /// <summary>Maps the interfaces of the candidates; null when one cannot be named.</summary>
         /// <param name="compilation">The compilation.</param>
@@ -313,25 +352,27 @@ internal sealed class DeclarationFacts(long declarations, ImmutableArray<WeakRef
         return (T?)answers.GetOrAdd(question, _ => answer());
     }
 
-    /// <summary>The declarations of every tree of the compilation, hashed in order.</summary>
+    /// <summary>The declarations and the type shapes of every tree of the compilation, each hashed in order.</summary>
     /// <param name="compilation">The compilation.</param>
-    private static long DeclarationsOf(Compilation compilation)
+    private static (long Declarations, long Shape) DeclarationsOf(Compilation compilation)
     {
-        var hash = unchecked((long)14695981039346656037UL);
+        var declarations = unchecked((long)14695981039346656037UL);
+        var shape = declarations;
         foreach (var tree in compilation.SyntaxTrees)
         {
-            hash = unchecked((hash ^ SyntaxIndex.Of(tree).Declarations) * 1099511628211L);
+            var index = SyntaxIndex.Of(tree);
+            declarations = unchecked((declarations ^ index.Declarations) * 1099511628211L);
+            shape = unchecked((shape ^ index.Shape) * 1099511628211L);
         }
 
-        return hash;
+        return (declarations, shape);
     }
 
-    /// <summary>Whether a compilation has the same declarations and the very same referenced assemblies.</summary>
-    /// <param name="otherDeclarations">Its declarations hash.</param>
+    /// <summary>Whether a compilation references the very same assemblies.</summary>
     /// <param name="otherReferences">Its referenced assemblies.</param>
-    private bool Matches(long otherDeclarations, ImmutableArray<IAssemblySymbol> otherReferences)
+    private bool ReferencesMatch(ImmutableArray<IAssemblySymbol> otherReferences)
     {
-        if (otherDeclarations != declarations || otherReferences.Length != references.Length)
+        if (otherReferences.Length != references.Length)
         {
             return false;
         }

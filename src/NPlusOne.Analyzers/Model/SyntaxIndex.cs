@@ -17,11 +17,13 @@ namespace NPlusOne.Analyzers.Model;
 /// <param name="mappings">The member calls whose name starts with <c>Map</c>, when one of them maps an endpoint.</param>
 /// <param name="behaviorTypes">The <c>typeof</c> expressions and <c>AddBehavior</c>/<c>AddOpenBehavior</c> names, when the file names a pipeline behavior.</param>
 /// <param name="declarations">The hash of the tree's declarations.</param>
+/// <param name="shape">The hash of the tree's type shapes: its declarations without methods.</param>
 internal sealed class SyntaxIndex(
     ImmutableArray<InvocationExpressionSyntax> calls,
     ImmutableArray<InvocationExpressionSyntax> mappings,
     ImmutableArray<SyntaxNode> behaviorTypes,
-    long declarations)
+    long declarations,
+    long shape)
 {
     /// <summary>The index of each tree seen, released with the tree.</summary>
     private static readonly ConditionalWeakTable<SyntaxTree, SyntaxIndex> Indexes = new();
@@ -56,6 +58,13 @@ internal sealed class SyntaxIndex(
     /// depends only on declarations can be reused from the previous compilation.
     /// </summary>
     public long Declarations { get; } = declarations;
+
+    /// <summary>
+    /// A hash of the tree's type shapes: <see cref="Declarations"/> without methods, constructors, destructors and
+    /// operators. The entity types and the interfaces each type implements depend only on namespaces, usings, type
+    /// headers, base lists, properties, fields and attributes, so typing a method signature keeps them.
+    /// </summary>
+    public long Shape { get; } = shape;
 
     /// <summary>The index of a tree, built on first use.</summary>
     /// <param name="tree">The tree.</param>
@@ -130,7 +139,8 @@ internal sealed class SyntaxIndex(
             calls.ToImmutable(),
             mapsEndpoints ? mappings.ToImmutable() : ImmutableArray<InvocationExpressionSyntax>.Empty,
             namesBehavior ? behaviorTypes.ToImmutable() : ImmutableArray<SyntaxNode>.Empty,
-            HashDeclarations(root));
+            HashDeclarations(root, withMethods: true),
+            HashDeclarations(root, withMethods: false));
     }
 
     /// <summary>Whether a name mentions a pipeline behavior or its registration.</summary>
@@ -144,12 +154,14 @@ internal sealed class SyntaxIndex(
     /// Trivia (whitespace, comments) is left out, so reformatting keeps the hash too.
     /// </summary>
     /// <param name="root">The tree's root.</param>
-    private static long HashDeclarations(SyntaxNode root)
+    /// <param name="withMethods">Whether methods, constructors, destructors and operators count.</param>
+    private static long HashDeclarations(SyntaxNode root, bool withMethods)
     {
         var hash = unchecked((long)14695981039346656037UL);
-        foreach (var token in root.DescendantTokens(static node => node switch
+        foreach (var token in root.DescendantTokens(node => node switch
                  {
                      BlockSyntax or ArrowExpressionClauseSyntax or GlobalStatementSyntax => false,
+                     BaseMethodDeclarationSyntax => withMethods,
                      EqualsValueClauseSyntax { Parent: PropertyDeclarationSyntax } => false,
                      EqualsValueClauseSyntax { Parent.Parent.Parent: FieldDeclarationSyntax field } => field.Modifiers.Any(SyntaxKind.ConstKeyword),
                      _ => true,

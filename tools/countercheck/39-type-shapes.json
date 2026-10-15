@@ -1,0 +1,20 @@
+[
+  {
+    "name": "The type shape counts properties",
+    "file": "src/NPlusOne.Analyzers/Model/SyntaxIndex.cs",
+    "old": "BaseMethodDeclarationSyntax => withMethods,",
+    "new": "BaseMethodDeclarationSyntax or BasePropertyDeclarationSyntax => withMethods,"
+  },
+  {
+    "name": "The type shape counts base lists",
+    "file": "src/NPlusOne.Analyzers/Model/SyntaxIndex.cs",
+    "old": "BaseMethodDeclarationSyntax => withMethods,",
+    "new": "BaseMethodDeclarationSyntax or BaseListSyntax => withMethods,"
+  },
+  {
+    "name": "Facts are shared by type shape only with the same references",
+    "file": "src/NPlusOne.Analyzers/Model/DeclarationFacts.cs",
+    "old": "                    if (!entry.ReferencesMatch(references))\n                    {\n                        continue;\n                    }\n\n                    if (entry.DeclarationsHash == declarations)\n                    {\n                        return entry;\n                    }\n",
+    "new": "                    if (entry.DeclarationsHash == declarations && entry.ReferencesMatch(references))\n                    {\n                        return entry;\n                    }\n"
+  }
+]
