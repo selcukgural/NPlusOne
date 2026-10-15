@@ -1,0 +1,26 @@
+[
+  {
+    "name": "A foreach loop is named",
+    "file": "src/NPlusOne.Analyzers/Analysis/IterationFinder.cs",
+    "old": "static region => DescribeForEach((IForEachLoopOperation)region)",
+    "new": "static region => \"x\""
+  },
+  {
+    "name": "A callback is named",
+    "file": "src/NPlusOne.Analyzers/Analysis/IterationFinder.cs",
+    "old": "static region => DescribeCallback(CalledWith(region).TargetMethod)",
+    "new": "static region => \"x\""
+  },
+  {
+    "name": "A FluentValidation rule is named",
+    "file": "src/NPlusOne.Analyzers/Analysis/IterationFinder.cs",
+    "old": "static region => $\"the '{CalledWith(region).TargetMethod.Name}' rule chained",
+    "new": "static region => $\"the '{region.Kind}' rule chained"
+  },
+  {
+    "name": "A lazy load's lambda is named",
+    "file": "src/NPlusOne.Analyzers/Analysis/LazyLoads.cs",
+    "old": "static region => $\"the '{IterationFinder.CalledWith(region).TargetMethod.Name}' lambda\"",
+    "new": "static region => \"x\""
+  }
+]

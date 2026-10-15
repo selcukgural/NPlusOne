@@ -210,10 +210,7 @@ internal sealed class LazyLoads(Session session)
 
     /// <summary>The iteration a <c>foreach</c> loop is.</summary>
     /// <param name="loop">The loop.</param>
-    private Iteration ForEachIteration(IForEachLoopOperation loop)
-        => _iterations.Find(loop.Body) is { } found && found.Region == loop
-            ? found
-            : new Iteration(IterationKind.Loop, loop, $"the foreach loop over '{Operations.Describe(loop.Collection)}'", false);
+    private static Iteration ForEachIteration(IForEachLoopOperation loop) => IterationFinder.ForEach(loop);
 
     /// <summary>A lambda parameter is an element when the lambda is called once per element of a sequence.</summary>
     /// <param name="reference">The parameter reference.</param>
@@ -236,7 +233,7 @@ internal sealed class LazyLoads(Session session)
                 return null;
             }
 
-            var iteration = new Iteration(IterationKind.Callback, lambda, $"the '{site.Invocation.TargetMethod.Name}' lambda", false);
+            var iteration = new Iteration(IterationKind.Callback, lambda, static region => $"the '{IterationFinder.CalledWith(region).TargetMethod.Name}' lambda", false);
             return new PerElement(iteration, reference.Parameter);
         }
 

@@ -25,7 +25,7 @@ internal sealed class IterationFinder(Session session)
             switch (parent)
             {
                 case IForEachLoopOperation loop when current != loop.Collection:
-                    return new Iteration(IterationKind.Loop, loop, DescribeForEach(loop), IsBatched(loop.Collection));
+                    return ForEach(loop);
                 case IForLoopOperation loop when !loop.Before.Contains(current):
                     return new Iteration(IterationKind.Loop, loop, "the for loop", false);
                 case IWhileLoopOperation loop:
@@ -44,12 +44,16 @@ internal sealed class IterationFinder(Session session)
 
                         if (session.IsIterating(site.Invocation.TargetMethod, site.Parameter))
                         {
-                            return new Iteration(IterationKind.Callback, lambda, DescribeCallback(site.Invocation.TargetMethod), false);
+                            return new Iteration(IterationKind.Callback, lambda, static region => DescribeCallback(CalledWith(region).TargetMethod), false);
                         }
 
                         if (IsPerItemRule(site.Invocation))
                         {
-                            return new Iteration(IterationKind.Callback, lambda, $"the '{site.Invocation.TargetMethod.Name}' rule chained on RuleForEach, which FluentValidation runs for each item", false);
+                            return new Iteration(
+                                IterationKind.Callback,
+                                lambda,
+                                static region => $"the '{CalledWith(region).TargetMethod.Name}' rule chained on RuleForEach, which FluentValidation runs for each item",
+                                false);
                         }
 
                         // A cache factory runs on a miss: once for a key that is the same on every element.
@@ -154,6 +158,15 @@ internal sealed class IterationFinder(Session session)
     /// <param name="collection">The loop's collection expression.</param>
     private static bool IsBatched(IOperation collection)
         => Operations.StripConversions(collection) is IInvocationOperation { TargetMethod.Name: "Chunk" or "Batch" };
+
+    /// <summary>The iteration a <c>foreach</c> loop is, named when a message first needs it.</summary>
+    /// <param name="loop">The loop.</param>
+    public static Iteration ForEach(IForEachLoopOperation loop)
+        => new(IterationKind.Loop, loop, static region => DescribeForEach((IForEachLoopOperation)region), IsBatched(loop.Collection));
+
+    /// <summary>The call a lambda is passed to, for a lambda known to be passed to one.</summary>
+    /// <param name="lambda">The lambda.</param>
+    internal static IInvocationOperation CalledWith(IOperation lambda) => CallbackSite.Of(lambda)!.Invocation;
 
     /// <summary>How messages name a <c>foreach</c> loop.</summary>
     /// <param name="loop">The loop.</param>

@@ -583,9 +583,15 @@ In the IDE, a declaration edit costs four times a body edit.
   operation, every time; `SummaryBuilder.RunsWhenCalled` does it for every operation. Read the lambda's conversion type
   (resolve `Expression<T>` once in `KnownSymbols`), memoise per lambda, and walk summaries top-down, skipping the
   subtrees of expression trees and stored lambdas.
-- **A7. Messages built only when reported.** `IterationFinder.Find` builds the description of each loop (the collection's
-  syntax text, `Replace`, `Substring`, interpolation) for every call. Cache the iteration per region and build the text in
-  `Messages`, from spans of the syntax text.
+- ~~**A7. Messages built only when reported.**~~ (done 2026-10-15) `IterationFinder.Find` built the description of each
+  loop (the collection's syntax text, `Replace`, `Substring`, interpolation) for every call it was asked about, and
+  almost none reports. `Iteration` is now a class whose description is built on first use from its region by a static
+  lambda, for the iterations `Find` and the lazy-load search create; the ones built right before a report keep their
+  text. `LazyLoads.ForEachIteration` had a second way to name a loop that could never run (`Find` on a loop's body always
+  answers that loop); both use `IterationFinder.ForEach` now. Tests: `MessageTests` (a foreach loop, a `Select` lambda, a
+  `Parallel.ForEach` callback, a lazy load in a loop and in a lambda, a FluentValidation rule on `RuleForEach`).
+  Counter-check `tools/countercheck/44-deferred-descriptions.json` (`--filter FullyQualifiedName~MessageTests`): all 4
+  parts red when undone. Not measured yet.
 
 ### Analyzer, allocations
 
