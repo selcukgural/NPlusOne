@@ -72,7 +72,13 @@ internal static class SummaryExport
         return lines.Count == 0 ? null : string.Join("\n", lines);
     }
 
-    /// <summary>Reads facts written by <see cref="Encode"/> into a summary.</summary>
+    /// <summary>
+    /// Reads facts written by <see cref="Encode"/> into a summary. The text comes from a referenced assembly, so any
+    /// package can put anything there: a line that <see cref="Encode"/> could not have written (an effect source that is
+    /// neither <c>E</c> nor <c>P</c> and a number, a shape that is not a <see cref="ShapeKind"/>) is skipped, so a broken
+    /// or forged summary makes the analysis see less instead of crashing it. Ordinals need no check here: every reader
+    /// looks them up against the call's arguments, and one the method does not have matches nothing.
+    /// </summary>
     /// <param name="facts">The text.</param>
     public static MethodSummary Decode(string facts)
     {
@@ -85,9 +91,8 @@ internal static class SummaryExport
             var f = line.Split('|');
             switch (f[0])
             {
-                case "Q" or "S" when f.Length >= 7:
-                    var source = f[1] == "E" ? SourceInfo.EfQuery : SourceInfo.FromParameter(ParseNumber(f[1].Substring(1)));
-                    var shape = new QueryShape(Enum.TryParse<ShapeKind>(f[3], out var kind) ? kind : ShapeKind.Rows, f[2], Empty(f[4]), Empty(f[5]), f[6] == "1");
+                case "Q" or "S" when f.Length >= 7 && Source(f[1]) is { } source && TryParseKind<ShapeKind>(f[3], out var kind):
+                    var shape = new QueryShape(kind, f[2], Empty(f[4]), Empty(f[5]), f[6] == "1");
                     effects.Add(new Effect(f[0] == "Q" ? EffectKind.Query : EffectKind.Save, source, f[2], Location.None, shape));
                     break;
                 case "R" when f.Length >= 9 && Enum.TryParse<OriginKind>(f[1], out var origin):
@@ -105,6 +110,27 @@ internal static class SummaryExport
 
         return new MethodSummary(effects.ToImmutable(), ImmutableArray<CallEdge>.Empty, delegates.ToImmutable(), reads.ToImmutable(), returns);
     }
+
+    /// <summary>The source of an effect line: <c>E</c> (on every call), or <c>P</c> and a parameter ordinal.</summary>
+    /// <param name="text">The field.</param>
+    /// <returns>The source, or null when the field is neither.</returns>
+    private static SourceInfo? Source(string text)
+    {
+        if (text == "E")
+        {
+            return SourceInfo.EfQuery;
+        }
+
+        return text.Length > 1 && text[0] == 'P' ? SourceInfo.FromParameter(ParseNumber(text.Substring(1))) : null;
+    }
+
+    /// <summary>Parses an enum member written by name, refusing a number that names no member.</summary>
+    /// <param name="text">The field.</param>
+    /// <param name="value">The member.</param>
+    /// <typeparam name="T">The enum.</typeparam>
+    private static bool TryParseKind<T>(string text, out T value)
+        where T : struct
+        => Enum.TryParse(text, out value) && Enum.IsDefined(typeof(T), value);
 
     /// <summary>An effect line.</summary>
     /// <param name="tag">Q or S.</param>

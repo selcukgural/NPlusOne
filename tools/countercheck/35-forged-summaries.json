@@ -1,0 +1,20 @@
+[
+  {
+    "name": "An effect source is E or P and a number (no crash on an empty field)",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryExport.cs",
+    "old": "return text.Length > 1 && text[0] == 'P' ? SourceInfo.FromParameter(ParseNumber(text.Substring(1))) : null;",
+    "new": "return SourceInfo.FromParameter(ParseNumber(text.Substring(1)));"
+  },
+  {
+    "name": "A shape is a defined kind",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryExport.cs",
+    "old": "=> Enum.TryParse(text, out value) && Enum.IsDefined(typeof(T), value);",
+    "new": "=> Enum.TryParse(text, out value);"
+  },
+  {
+    "name": "A well-formed summary next to broken ones still reports (reported side)",
+    "file": "src/NPlusOne.Analyzers/Analysis/SummaryExport.cs",
+    "old": "        if (text == \"E\")\n        {\n            return SourceInfo.EfQuery;\n        }",
+    "new": "        if (text == \"E\")\n        {\n            return null;\n        }"
+  }
+]

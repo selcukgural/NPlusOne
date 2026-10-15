@@ -388,6 +388,14 @@ assigned source is never read half-built by another thread. Counter-checks `tool
   says how to report privately (GitHub's private vulnerability reporting is on) and what counts. Repository settings
   checked: the `nuget` environment needs a reviewer and deploys only from `v*` tags, Pages only from `main`; no ruleset
   protects `v*` tags yet.
+- ~~**Forged summaries.**~~ (done 2026-10-15) Summaries are read from every referenced assembly, so any package can
+  carry any text there. An effect line with an empty source field made `SummaryExport.Decode` throw (AD0001, which fails
+  builds that treat warnings as errors), and an undefined shape number was taken as a shape. Such lines are now skipped.
+  Ordinals the method does not have, unknown return kinds and navigation or delegate ordinals out of range turned out
+  harmless (every reader looks them up against the call's arguments), so they are left as they are, and the test keeps
+  them to show it. Test: `ReferencedSummaryTests` (a library with forged summaries next to a well-formed one; AD0001
+  before). Counter-check `tools/countercheck/35-forged-summaries.json` (`--project tests/NPlusOne.Analyzers.Tests
+  --filter FullyQualifiedName~ReferencedSummaryTests`): all 3 parts red when undone.
 - **ABP samples.** Scanned 2026-10-13, see item 8: the scan found nothing because the analyzer could not see ABP code.
 - **GraphQL resolvers (catalogue C24).** Hot Chocolate type-extension resolvers taking `[Parent]` run once per parent
   without a DataLoader; see what the analyzer misses there and decide whether to follow them before Dapper and ADO.NET.
