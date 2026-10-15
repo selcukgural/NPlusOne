@@ -38,7 +38,8 @@ internal sealed record ScopeSettings(
     /// <exception cref="ArgumentException">An ignored pattern is <see langword="null"/>.</exception>
     public static ScopeSettings From(NPlusOneOptions options)
     {
-        var patterns = new Regex[options.IgnoredSqlPatterns.Count];
+        // A scope begins on every request, and most have no ignored pattern: they share the empty array.
+        var patterns = options.IgnoredSqlPatterns.Count == 0 ? [] : new Regex[options.IgnoredSqlPatterns.Count];
         for (var i = 0; i < patterns.Length; i++)
         {
             patterns[i] = options.IgnoredSqlPatterns[i] is { } pattern

@@ -1,7 +1,8 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace NPlusOne.EntityFrameworkCore.Recording;
 
@@ -24,6 +25,13 @@ internal sealed class LazyLoadListener : IObserver<DiagnosticListener>, IObserve
 
     /// <summary>The single listener instance.</summary>
     private static readonly LazyLoadListener Instance = new();
+
+    /// <summary>
+    /// The <c>Entity.Navigation</c> name of each navigation lazy-loaded so far, per entity type: a lazy load in a loop
+    /// happens once per element, and its name is the same each time. Keyed weakly by the type, so a collectible assembly
+    /// can still be unloaded.
+    /// </summary>
+    private static readonly ConditionalWeakTable<Type, ConcurrentDictionary<string, string>> NavigationNames = [];
 
     /// <summary>1 once subscribed to <see cref="DiagnosticListener.AllListeners"/>.</summary>
     private static int _subscribed;
@@ -62,7 +70,7 @@ internal sealed class LazyLoadListener : IObserver<DiagnosticListener>, IObserve
         }
 
         var scope = NPlusOneScope.Current;
-        if (scope is null || !UsesGuard(data.Context))
+        if (scope is null || !ContextFacts.Of(data.Context).UsesGuard)
         {
             return;
         }
@@ -71,7 +79,7 @@ internal sealed class LazyLoadListener : IObserver<DiagnosticListener>, IObserve
         try
         {
             var entityType = ResolveEntityType(data);
-            NPlusOneScope.RecordLazyLoad(scope, $"{entityType.Name}.{data.NavigationPropertyName}", entityType);
+            NPlusOneScope.RecordLazyLoad(scope, NavigationName(entityType, data.NavigationPropertyName), entityType);
         }
 #pragma warning disable CA1031 // A failure to record is dropped, not thrown into the application.
         catch (Exception)
@@ -80,14 +88,15 @@ internal sealed class LazyLoadListener : IObserver<DiagnosticListener>, IObserve
         }
     }
 
-    /// <summary>
-    /// Whether a context was built with <c>UseNPlusOneGuard</c>: the listener sees every EF Core context of the process,
-    /// and only the ones the guard is attached to are watched, like their commands.
-    /// </summary>
-    /// <param name="context">The context that lazy-loaded.</param>
-    /// <returns><see langword="true"/> when its options carry the guard's interceptor.</returns>
-    private static bool UsesGuard(DbContext? context)
-        => context?.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.Interceptors?.Contains(NPlusOneCommandInterceptor.Instance) == true;
+    /// <summary>The <c>Entity.Navigation</c> name of a navigation, built once per entity type and navigation.</summary>
+    /// <param name="entityType">The entity type.</param>
+    /// <param name="navigation">The navigation's name.</param>
+    /// <returns>The name.</returns>
+    internal static string NavigationName(Type entityType, string navigation)
+    {
+        var names = NavigationNames.GetValue(entityType, static _ => new ConcurrentDictionary<string, string>(StringComparer.Ordinal));
+        return names.TryGetValue(navigation, out var name) ? name : names.GetOrAdd(navigation, string.Concat(entityType.Name, ".", navigation));
+    }
 
     /// <summary>Not used: the listener streams never complete in a way that matters to the guard.</summary>
     public void OnCompleted()

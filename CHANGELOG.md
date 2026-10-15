@@ -45,6 +45,8 @@
   request with ten queries inside a scope allocates about a third less, and runs about an eighth faster.
 - The SQL of a command is normalized once per command text, not on every run: EF Core sends the same text for every
   element of an N+1. Without call sites, a scope now adds a few percent to a request's time.
+- A scope allocates a fifth of what it did (272 bytes when nothing is recorded), and the provider's dialect and the
+  lazy-loaded navigation names are worked out once per context and per navigation instead of on every command.
 - New option `AssertThrowsInProduction` (default `false`), read by the ASP.NET Core assert filters.
 - An `IgnoredSqlPatterns` regex without a timeout of its own stops after 100 ms on a command (that command is then not
   recorded), so a pattern that backtracks on SQL with inlined values cannot hold the request.

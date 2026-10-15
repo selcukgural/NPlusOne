@@ -250,7 +250,7 @@ internal sealed class NPlusOneCommandInterceptor : DbCommandInterceptor, ISaveCh
                 return;
             }
 
-            NPlusOneScope.RecordCommand(scope, kind, sql, SqlFingerprint.DialectOf(eventData.Context?.Database.ProviderName));
+            NPlusOneScope.RecordCommand(scope, kind, sql, ContextFacts.Of(eventData.Context).Dialect);
         }
 #pragma warning disable CA1031 // Recording must never break the command it observes.
         catch (Exception)

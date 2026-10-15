@@ -1,5 +1,4 @@
-using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using NPlusOne.EntityFrameworkCore.Recording;
 
 namespace NPlusOne.EntityFrameworkCore;
@@ -20,8 +19,15 @@ public sealed class NPlusOneScope : IDisposable
     /// <summary>The innermost scope of the current async flow, or <see langword="null"/> outside any scope.</summary>
     private static readonly AsyncLocal<NPlusOneScope?> CurrentScope = new();
 
-    /// <summary>Run counts per group. Counters are boxed so they can be incremented with <see cref="Interlocked"/>.</summary>
-    private readonly ConcurrentDictionary<GroupKey, StrongBox<int>> _groups = new();
+    /// <summary>
+    /// Run counts per group, created on the first record and read and written under <see cref="_gate"/>. A scope begins on
+    /// every request, most record a few groups and run one command at a time, so a plain dictionary under a lock costs
+    /// less than a concurrent one, which allocates its buckets and a lock per processor up front.
+    /// </summary>
+    private Dictionary<GroupKey, int>? _groups;
+
+    /// <summary>Guards <see cref="_groups"/>: EF Core may run commands on several contexts at once in one async flow.</summary>
+    private readonly object _gate = new();
 
     /// <summary>The settings copied from the options when the scope began.</summary>
     private readonly ScopeSettings _settings;
@@ -173,30 +179,44 @@ public sealed class NPlusOneScope : IDisposable
             return;
         }
 
-        var counter = _groups.GetOrAdd(key, static _ => new StrongBox<int>());
-        Interlocked.Increment(ref counter.Value);
+        lock (_gate)
+        {
+            _groups ??= [];
+            CollectionsMarshal.GetValueRefOrAddDefault(_groups, key, out _)++;
+        }
     }
 
     /// <summary>Builds a report from the current counts; suspects are sorted most frequent first.</summary>
     /// <returns>The report.</returns>
     private NPlusOneReport BuildReport()
     {
-        List<NPlusOneSuspect> suspects = [];
-        foreach (var (key, counter) in _groups)
+        List<NPlusOneSuspect>? suspects = null;
+        lock (_gate)
         {
-            var count = Volatile.Read(ref counter.Value);
-            if (count <= _settings.RepeatThreshold)
+            if (_groups is not null)
             {
-                continue;
-            }
+                foreach (var (key, count) in _groups)
+                {
+                    if (count <= _settings.RepeatThreshold)
+                    {
+                        continue;
+                    }
 
-            suspects.Add(key.Kind == NPlusOneSuspectKind.LazyLoad
-                ? new NPlusOneSuspect(key.Kind, count, null, key.Text, key.CallSite)
-                : new NPlusOneSuspect(key.Kind, count, Preview(key.Text), null, key.CallSite));
+                    suspects ??= [];
+                    suspects.Add(key.Kind == NPlusOneSuspectKind.LazyLoad
+                        ? new NPlusOneSuspect(key.Kind, count, null, key.Text, key.CallSite)
+                        : new NPlusOneSuspect(key.Kind, count, Preview(key.Text), null, key.CallSite));
+                }
+            }
         }
 
-        suspects.Sort(CompareSuspects);
-        return new NPlusOneReport(suspects, Volatile.Read(ref _commandCount), Volatile.Read(ref _lazyLoadCount), _settings.RepeatThreshold);
+        // Most scopes have no suspect: their report shares the empty list.
+        suspects?.Sort(CompareSuspects);
+        return new NPlusOneReport(
+            suspects is null ? [] : suspects,
+            Volatile.Read(ref _commandCount),
+            Volatile.Read(ref _lazyLoadCount),
+            _settings.RepeatThreshold);
     }
 
     /// <summary>Cuts a fingerprint to the configured preview length.</summary>

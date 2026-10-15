@@ -1,0 +1,26 @@
+[
+  {
+    "name": "A context without the guard is not watched",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/ContextFacts.cs",
+    "old": "        => context.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.Interceptors?.Contains(NPlusOneCommandInterceptor.Instance) == true;",
+    "new": "        => context.GetService<IDbContextOptions>() is not null;"
+  },
+  {
+    "name": "Each context's dialect is its provider's",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/ContextFacts.cs",
+    "old": ": this(SqlFingerprint.DialectOf(context.Database.ProviderName), HasGuard(context))",
+    "new": ": this(SqlDialect.MySql, HasGuard(context))"
+  },
+  {
+    "name": "Navigation names are kept per navigation",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/LazyLoadListener.cs",
+    "old": "names.GetOrAdd(navigation, string.Concat(entityType.Name, \".\", navigation));",
+    "new": "names.GetOrAdd(string.Empty, string.Concat(entityType.Name, \".\", navigation));"
+  },
+  {
+    "name": "A group counts every run",
+    "file": "src/NPlusOne.EntityFrameworkCore/NPlusOneScope.cs",
+    "old": "CollectionsMarshal.GetValueRefOrAddDefault(_groups, key, out _)++;",
+    "new": "CollectionsMarshal.GetValueRefOrAddDefault(_groups, key, out _) = 1;"
+  }
+]

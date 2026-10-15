@@ -506,13 +506,20 @@ In the IDE, a declaration edit costs four times a body edit.
   `Replace` passes, each a new string. Fold the value, `IN` list and whitespace steps into the scan: write into a pooled
   `char` buffer (`ArrayPool<char>`), find runs with `SearchValues`, and make one string at the end. `SqlFingerprintTests`
   guard the privacy promise; add cases for every regex branch before replacing it.
-- **R4. A cheaper scope.** Create the group dictionary on the first record, not at begin; keep the highest count so a
-  report without suspects allocates no list; skip `ScopeSettings` array copies when there are no ignored patterns. Target:
-  an empty scope under 300 B.
-- **R5. The dialect once per context.** `Database.ProviderName` resolves a service on every command, and it is computed
-  before any scope accepts the command. Compute it only when a scope records, cached per context options.
-- **R6. Lazy loads without strings.** `UsesGuard` looks up the options extension on every lazy load, and the
-  `Entity.Navigation` name is interpolated each time. Cache both, per options and per entity type and navigation.
+- ~~**R4. A cheaper scope.**~~ (done 2026-10-15) The groups were a `ConcurrentDictionary` created at begin (buckets and a
+  lock per processor) with a boxed counter per group; they are now a `Dictionary` created on the first record, counted
+  under a lock with one lookup (`CollectionsMarshal.GetValueRefOrAddDefault`). A report without suspects shares the empty
+  list, and a scope without ignored patterns the empty array. `ScopeBenchmarks`: empty scope 151 ns and 1.25 KB → 54 ns
+  and 272 B; ten commands 993 ns and 1.44 KB → 861 ns and 640 B.
+- ~~**R5. The dialect once per context.**~~ (done 2026-10-15) `Database.ProviderName` enumerated the providers on every
+  command. `ContextFacts` reads the dialect, and whether the guard is attached, once per context instance (a
+  `ConditionalWeakTable`, released with the context).
+- ~~**R6. Lazy loads without strings.**~~ (done 2026-10-15) The lazy-load listener looked up the options extension on every
+  lazy load (now `ContextFacts.UsesGuard`) and interpolated the `Entity.Navigation` name each time (now kept per entity
+  type, weakly, and navigation). `GuardedRequestBenchmarks`, scope without call sites, R4–R6 together: 10 queries
+  138 → 131 KB (123 KB without a scope), 10 lazy loads 275 → 264 KB (261 KB). Tests: `LazyLoadListenerTests` (each
+  navigation keeps its own name). Counter-check `tools/countercheck/40-scope-and-context-facts.json` (same `--project` and
+  `--filter` as 32): all 4 parts red when undone.
 - **R7. Bounded groups.** A long scope (a background job, a long test) keeps every distinct fingerprint. Cap the groups and
   count the overflow in the report.
 
