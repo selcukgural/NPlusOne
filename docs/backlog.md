@@ -594,10 +594,15 @@ In the IDE, a declaration edit costs four times a body edit.
   `FullName + "." + Name` even when no pattern has a dot. Compare namespace parts against spans or against symbols resolved
   once in `KnownSymbols`; check the method name first; build a full name only for a pattern that needs it, into a pooled
   builder; `TypeName.Of` appends segments in order and looks up assembly indexes in a dictionary.
-- **A9. No allocation on cache hits.** Method groups passed to `GetOrAdd` allocate a delegate per call (`FindTargets`,
-  `CollectAssignedValues`, `NavigationsOf`): keep them in fields and try `TryGetValue` first. `WitnessKey` becomes a
-  `readonly record struct`. `LoadsLazily` stops splitting a string; `AsNavigation` is computed once per callback;
-  `OnBlockEnd` returns early with nothing collected. `SyntaxIndex.CallsTo` checks for no calls before making an iterator.
+- ~~**A9. No allocation on cache hits.**~~ (done 2026-10-15) Method groups passed to `GetOrAdd` (`FindTargets`,
+  `CollectAssignedValues`, `BuildNavigations`) made a delegate on every call: they are kept in fields, and every cache
+  is asked with `TryGetValue` first (the mapping reads and mediator handlers too, whose factories capture). `WitnessKey` is
+  a `readonly record struct`. `LoadsLazily` walks the path in place and matches each segment against the navigation
+  names (`NavigationNamed`), joining with the navigation's own name, instead of `Split` and a capturing `FirstOrDefault`.
+  `OnBlockEnd` returns with nothing collected; the whole-compilation scans ask `SyntaxIndex.HasCallsTo`, which makes no
+  iterator. Corpus: `Lazy/SimilarNavigations.cs` (two navigations starting alike, one included). Counter-check
+  `tools/countercheck/43-allocation-free-lookups.json` (`--filter "FullyQualifiedName~CorpusTests|FullyQualifiedName~IncrementalTests"`):
+  all 3 parts red when undone. Not measured yet.
 - **A10. Pooled builders.** The per-operation paths build short-lived `ImmutableArray` builders, lists and sets.
   A small pool (thread-static, as Roslyn's `ArrayBuilder`) where `BuildBenchmarks` shows them in the allocations;
   netstandard2.0 has `ArrayPool` and spans through System.Memory, which Roslyn already brings, but not `string.Create`

@@ -70,6 +70,25 @@ internal sealed class SyntaxIndex(
     /// <param name="tree">The tree.</param>
     public static SyntaxIndex Of(SyntaxTree tree) => Indexes.GetValue(tree, Build);
 
+    /// <summary>
+    /// Whether a tree calls one of the scanned names; asked of every tree on every compilation, so it makes no iterator,
+    /// and most trees call none of the names.
+    /// </summary>
+    /// <param name="tree">The tree.</param>
+    /// <param name="name">The name called.</param>
+    public static bool HasCallsTo(SyntaxTree tree, string name)
+    {
+        foreach (var call in Of(tree).Calls)
+        {
+            if (CalledName(call) == name)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>The calls of a tree to one of the scanned names.</summary>
     /// <param name="tree">The tree.</param>
     /// <param name="name">The name called.</param>

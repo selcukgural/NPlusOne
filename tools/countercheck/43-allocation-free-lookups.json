@@ -1,0 +1,20 @@
+[
+  {
+    "name": "A navigation path is read segment by segment",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "var end = dot < 0 ? relativePath.Length : dot;",
+    "new": "var end = relativePath.Length;"
+  },
+  {
+    "name": "A segment matches a navigation's whole name",
+    "file": "src/NPlusOne.Analyzers/Analysis/BlockAnalyzer.cs",
+    "old": "if (name.Length == length && string.CompareOrdinal(name, 0, path, start, length) == 0)",
+    "new": "if (string.CompareOrdinal(name, 0, path, start, Math.Min(length, 1)) == 0)"
+  },
+  {
+    "name": "A tree that calls a scanned name is found",
+    "file": "src/NPlusOne.Analyzers/Model/SyntaxIndex.cs",
+    "old": "            if (CalledName(call) == name)\n            {\n                return true;\n            }",
+    "new": "            if (CalledName(call) == name)\n            {\n                return false;\n            }"
+  }
+]

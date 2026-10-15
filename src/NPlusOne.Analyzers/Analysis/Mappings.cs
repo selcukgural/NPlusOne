@@ -87,6 +87,11 @@ internal sealed class Mappings(Compilation compilation, EntityModel entities, Kn
     public MappingReads Reads(ITypeSymbol source, ITypeSymbol destination, MapperLibrary library)
     {
         var key = (library, source.OriginalDefinition, destination.OriginalDefinition);
+        if (_reads.TryGetValue(key, out var known))
+        {
+            return known;
+        }
+
         return _reads.GetOrAdd(key, k => _maps.GetOrAdd(k, CollectMap) is { } map
             ? Configured(source, destination, map)
             : new MappingReads(Convention(source, destination, MaxDepth), ImmutableArray<MapperCallback>.Empty, false));

@@ -85,7 +85,7 @@ internal sealed class EntityModel(
     /// <summary>The navigations of an entity type, lazy or not.</summary>
     /// <param name="entity">The entity type.</param>
     public ImmutableArray<Navigation> NavigationsOf(ITypeSymbol entity)
-        => _navigations.GetOrAdd(entity.OriginalDefinition, BuildNavigations);
+        => _navigations.TryGetValue(entity.OriginalDefinition, out var navigations) ? navigations : _navigations.GetOrAdd(entity.OriginalDefinition, BuildNavigations);
 
     /// <summary>The entity types of a compilation, reused from the previous compilation with the same declarations and mapped types.</summary>
     /// <param name="compilation">The compilation.</param>
@@ -116,7 +116,7 @@ internal sealed class EntityModel(
 
         foreach (var tree in compilation.SyntaxTrees)
         {
-            if (!SyntaxIndex.CallsTo(tree, "Entity").Any())
+            if (!SyntaxIndex.HasCallsTo(tree, "Entity"))
             {
                 continue;
             }
@@ -456,7 +456,7 @@ internal sealed class EntityModel(
         var builder = ImmutableHashSet.CreateBuilder<IPropertySymbol>(SymbolEqualityComparer.Default);
         foreach (var tree in compilation.SyntaxTrees)
         {
-            if (!SyntaxIndex.CallsTo(tree, "AutoInclude").Any())
+            if (!SyntaxIndex.HasCallsTo(tree, "AutoInclude"))
             {
                 continue;
             }

@@ -347,7 +347,13 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
     {
         lock (_gate)
         {
-            foreach (var diagnostic in _lazyLoads.Values.OrderBy(d => d.Location.SourceSpan.Start))
+            // Most blocks read no lazy navigation in a loop.
+            if (_lazyLoads.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var diagnostic in _lazyLoads.Values.OrderBy(static d => d.Location.SourceSpan.Start))
             {
                 context.ReportDiagnostic(diagnostic);
             }
@@ -1133,26 +1139,49 @@ internal sealed partial class BlockAnalyzer(Session session, ISymbol owner)
             return false;
         }
 
+        // Walks the segments in place: the path joined so far uses the navigation's own name, so no segment is cut out.
         var type = elementType;
         var path = element.Path;
-        foreach (var segment in relativePath.Split('.'))
+        var start = 0;
+        while (start < relativePath.Length)
         {
-            var navigation = session.Entities.NavigationsOf(type).FirstOrDefault(n => n.Property.Name == segment);
-            if (navigation is null)
+            var dot = relativePath.IndexOf('.', start);
+            var end = dot < 0 ? relativePath.Length : dot;
+            if (NavigationNamed(session.Entities.NavigationsOf(type), relativePath, start, end - start) is not { } navigation)
             {
                 return false;
             }
 
-            path = SourceTracer.Join(path, segment);
+            path = SourceTracer.Join(path, navigation.Property.Name);
             if (LoadsLazily(navigation, element) && !element.Loads(path, navigation))
             {
                 return true;
             }
 
             type = navigation.Target;
+            start = end + 1;
         }
 
         return false;
+    }
+
+    /// <summary>The navigation whose name is the segment of <paramref name="path"/> at the position, or null.</summary>
+    /// <param name="navigations">The navigations of the type the segment is read on.</param>
+    /// <param name="path">A navigation path.</param>
+    /// <param name="start">Where the segment starts.</param>
+    /// <param name="length">The segment's length.</param>
+    private static Navigation? NavigationNamed(ImmutableArray<Navigation> navigations, string path, int start, int length)
+    {
+        foreach (var navigation in navigations)
+        {
+            var name = navigation.Property.Name;
+            if (name.Length == length && string.CompareOrdinal(name, 0, path, start, length) == 0)
+            {
+                return navigation;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Whether reading the navigation on an entity from that source loads it: lazy, and loadable when the query does not track.</summary>

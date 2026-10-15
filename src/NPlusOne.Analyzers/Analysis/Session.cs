@@ -41,6 +41,8 @@ internal sealed class Session
     private readonly Lazy<ImmutableArray<INamedTypeSymbol>> _implementing;
     private readonly Lazy<ImmutableArray<INamedTypeSymbol>> _overriding;
     private readonly Func<ImmutableArray<INamedTypeSymbol>> _implementingCandidates;
+    private readonly Func<IMethodSymbol, ImmutableArray<IMethodSymbol>> _findTargets;
+    private readonly Func<ISymbol, ImmutableArray<IOperation>> _collectAssignedValues;
     private readonly DeclarationFacts _facts;
     private readonly ConcurrentDictionary<string, Lazy<ImmutableArray<INamedTypeSymbol>>> _mediatorTypes = new(StringComparer.Ordinal);
     private readonly Lazy<ReferencedSummaries> _referenced;
@@ -68,6 +70,10 @@ internal sealed class Session
         _implementing = new Lazy<ImmutableArray<INamedTypeSymbol>>(() => CollectCandidateTypes(Model.Symbols.MayDeriveOrImplement));
         _overriding = new Lazy<ImmutableArray<INamedTypeSymbol>>(() => CollectCandidateTypes(Model.Symbols.MayOverride));
         _implementingCandidates = () => _implementing.Value;
+
+        // Method groups kept as delegates, so a cache lookup that finds its value allocates nothing.
+        _findTargets = FindTargets;
+        _collectAssignedValues = CollectAssignedValues;
         Mappings = new Mappings(compilation, Entities, symbols, _facts);
         _endpointHandlers = new Lazy<ImmutableHashSet<IMethodSymbol>>(CollectEndpointHandlers);
         _registeredBehaviors = new Lazy<ImmutableHashSet<ITypeSymbol>>(CollectRegisteredBehaviors);
@@ -86,6 +92,11 @@ internal sealed class Session
     {
         foreach (var tree in Compilation.SyntaxTrees)
         {
+            if (!SyntaxIndex.HasCallsTo(tree, "AddNewtonsoftJson"))
+            {
+                continue;
+            }
+
             SemanticModel? model = null;
             foreach (var call in SyntaxIndex.CallsTo(tree, "AddNewtonsoftJson"))
             {
@@ -176,7 +187,7 @@ internal sealed class Session
     /// </summary>
     /// <param name="method">The method called.</param>
     public ImmutableArray<IMethodSymbol> TargetsOf(IMethodSymbol method)
-        => _targets.GetOrAdd(method.OriginalDefinition, FindTargets);
+        => _targets.TryGetValue(method.OriginalDefinition, out var targets) ? targets : _targets.GetOrAdd(method.OriginalDefinition, _findTargets);
 
     /// <summary>
     /// The source methods a call can run, as <see cref="TargetsOf(IMethodSymbol)"/> when it is dispatched; a call that is
@@ -315,7 +326,10 @@ internal sealed class Session
             return ImmutableArray<IMethodSymbol>.Empty;
         }
 
-        return _handlers.GetOrAdd((request, method.Name), key => FindHandlers(key.Request, key.Call, mediator.ContainingNamespace.ToDisplayString()));
+        var key = (request, method.Name);
+        return _handlers.TryGetValue(key, out var handlers)
+            ? handlers
+            : _handlers.GetOrAdd(key, k => FindHandlers(k.Request, k.Call, mediator.ContainingNamespace.ToDisplayString()));
     }
 
     /// <summary>
@@ -561,8 +575,9 @@ internal sealed class Session
     /// <param name="property">The property.</param>
     public static bool IsAutoProperty(IPropertySymbol property)
     {
-        if (property.DeclaringSyntaxReferences.Length == 0
-            || property.DeclaringSyntaxReferences[0].GetSyntax() is not PropertyDeclarationSyntax { ExpressionBody: null, AccessorList: { } accessors })
+        var references = property.DeclaringSyntaxReferences;
+        if (references.Length == 0
+            || references[0].GetSyntax() is not PropertyDeclarationSyntax { ExpressionBody: null, AccessorList: { } accessors })
         {
             return false;
         }
@@ -598,7 +613,7 @@ internal sealed class Session
     /// </summary>
     /// <param name="member">The field or auto-property.</param>
     public ImmutableArray<IOperation> AssignedValues(ISymbol member)
-        => _assignedValues.GetOrAdd(member.OriginalDefinition, CollectAssignedValues);
+        => _assignedValues.TryGetValue(member.OriginalDefinition, out var values) ? values : _assignedValues.GetOrAdd(member.OriginalDefinition, _collectAssignedValues);
 
     /// <summary>Scans the member's type for the values assigned to it.</summary>
     /// <param name="member">The field or auto-property.</param>
@@ -1224,12 +1239,11 @@ internal sealed class Session
     /// <param name="Kind">Query or save.</param>
     /// <param name="Depth">The remaining depth.</param>
     /// <param name="Dispatched">Whether the call is dispatched or runs the method's own body only.</param>
-    private sealed record WitnessKey(IMethodSymbol Method, long Arguments, EffectKind Kind, int Depth, bool Dispatched)
+    private readonly record struct WitnessKey(IMethodSymbol Method, long Arguments, EffectKind Kind, int Depth, bool Dispatched)
     {
         /// <inheritdoc/>
-        public bool Equals(WitnessKey? other)
-            => other is not null
-               && SymbolEqualityComparer.Default.Equals(Method, other.Method)
+        public bool Equals(WitnessKey other)
+            => SymbolEqualityComparer.Default.Equals(Method, other.Method)
                && Arguments == other.Arguments
                && Kind == other.Kind
                && Depth == other.Depth
