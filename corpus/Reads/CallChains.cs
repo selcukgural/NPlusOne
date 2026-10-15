@@ -121,6 +121,24 @@ public class CallChains
         return category.ParentId is null ? 0 : 1 + await RecursiveWithoutLoop(category.ParentId.Value); // expect: NP0004
     }
 
+    // Back to the start along two paths: four calls through the hops, two through Climb. The search meets Climb first on
+    // the long way, with too little depth left to go on, and must still follow it on the short way.
+    public async Task<int> TreeDepth(int categoryId)
+    {
+        var category = await _db.Categories.FirstAsync(c => c.Id == categoryId);
+        return category.ParentId is null ? 0 : await Up(category.ParentId.Value); // expect: NP0004
+    }
+
+    private async Task<int> Up(int categoryId) => await FirstHop(categoryId) + await Climb(categoryId);
+
+    private async Task<int> FirstHop(int categoryId) => await SecondHop(categoryId);
+
+    private async Task<int> SecondHop(int categoryId) => await Climb(categoryId);
+
+    private async Task<int> Climb(int categoryId) => await Back(categoryId);
+
+    private async Task<int> Back(int categoryId) => 1 + await TreeDepth(categoryId);
+
     public async Task UserIteratingHelper(List<int> ids)
     {
         await EachAsync(ids, async id => await _db.Orders.CountAsync(o => o.CustomerId == id)); // expect: NP0001

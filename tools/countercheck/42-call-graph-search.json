@@ -1,0 +1,14 @@
+[
+  {
+    "name": "A method reached again with more depth left is followed again",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "followed.TryGetValue(target, out var left) && left >= depth",
+    "new": "followed.TryGetValue(target, out var left) && left >= 0"
+  },
+  {
+    "name": "A navigation search follows a method again with more depth left",
+    "file": "src/NPlusOne.Analyzers/Analysis/Session.cs",
+    "old": "if (_followed.TryGetValue(key, out var left) && left >= depth)",
+    "new": "if (_followed.TryGetValue(key, out var left) && left >= 0)"
+  }
+]

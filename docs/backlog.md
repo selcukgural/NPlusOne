@@ -571,9 +571,14 @@ In the IDE, a declaration edit costs four times a body edit.
     filled with `??=` from a query was untraced, because the `null` made its source unknown. A `null` initializer now
     holds no elements (`SourceTracer.IsNull`).
   - Counter-check `tools/countercheck/38-operation-index.json`: all 8 parts red when undone. Not measured yet.
-- **A5. Bounded call-graph searches.** `Session.Reaches` and `CollectNavigationReads` explore every path to the depth
-  limit with no visited set. Search breadth first with a visited set (a shorter path leaves more depth), and cache
-  `NavigationReadsOf`.
+- ~~**A5. Bounded call-graph searches.**~~ (done 2026-10-15) `Session.Reaches` and `CollectNavigationReads` explored every
+  path to the depth limit, so shared parts of the call graph were walked once per path. Both now remember what they
+  followed and with how much depth left (per method; per method, parameter and element flag for the reads), and follow a
+  method again only with more depth left: what it can reach was already looked at. The reads found are kept in a set
+  besides the ordered list, instead of `Contains` on the list. Corpus: `Reads/CallChains.cs` (`TreeDepth`) and
+  `Lazy/ComputedAndPassed.cs` (`ReadThroughTwoPaths`): a method met first on a long path with too little depth left,
+  then on a short one. Counter-check `tools/countercheck/42-call-graph-search.json`: both parts red when undone. Not
+  measured yet.
 - **A6. Expression-tree checks per lambda.** `Operations.IsExpressionTree` asks `GetTypeInfo` for every lambda above an
   operation, every time; `SummaryBuilder.RunsWhenCalled` does it for every operation. Read the lambda's conversion type
   (resolve `Expression<T>` once in `KnownSymbols`), memoise per lambda, and walk summaries top-down, skipping the

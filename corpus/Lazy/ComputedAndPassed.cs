@@ -117,6 +117,32 @@ public class ComputedAndPassed
 
     private static string Name(Shipment shipment) => shipment.Customer.Name;
 
+    // The read is five calls down the hops, past the depth followed, and four down the short way through Reader: met first
+    // on the long way, Reader must still be followed on the short one.
+    public async Task<int> ReadThroughTwoPaths()
+    {
+        var shipments = await _db.Shipments.ToListAsync();
+        var length = 0;
+        foreach (var shipment in shipments)
+        {
+            length += Label(shipment); // expect: NP0002
+        }
+
+        return length;
+    }
+
+    private static int Label(Shipment shipment) => FirstHop(shipment) + Reader(shipment);
+
+    private static int FirstHop(Shipment shipment) => SecondHop(shipment);
+
+    private static int SecondHop(Shipment shipment) => Reader(shipment);
+
+    private static int Reader(Shipment shipment) => Middle(shipment);
+
+    private static int Middle(Shipment shipment) => NameLength(shipment);
+
+    private static int NameLength(Shipment shipment) => shipment.Customer.Name.Length;
+
     private static string FirstName(List<Shipment> shipments) => Name(shipments.First());
 
     private static void PrintWeights(List<Shipment> shipments)

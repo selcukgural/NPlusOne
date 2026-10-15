@@ -288,7 +288,7 @@ internal sealed class Session
     private ImmutableArray<ParameterNavigationRead> NavigationReadsOf(ImmutableArray<IMethodSymbol> targets, int ordinal)
     {
         var builder = ImmutableArray.CreateBuilder<ParameterNavigationRead>();
-        CollectNavigationReads(targets, ordinal, false, Settings.MaxCallDepth, builder);
+        CollectNavigationReads(targets, ordinal, false, Settings.MaxCallDepth, new NavigationReadSearch(builder));
         return builder.ToImmutable();
     }
 
@@ -793,13 +793,18 @@ internal sealed class Session
     /// <param name="to">The method to come back to.</param>
     /// <param name="depth">How many calls to follow.</param>
     public bool Reaches(IInvocationOperation call, IMethodSymbol to, int depth)
-        => Reaches(TargetsOf(call.TargetMethod, call.IsVirtual), to, depth);
+        => Reaches(TargetsOf(call.TargetMethod, call.IsVirtual), to, depth, new Dictionary<IMethodSymbol, int>(SymbolEqualityComparer.Default));
 
-    /// <summary>Whether running one of the given methods can lead to <paramref name="to"/> within <paramref name="depth"/> calls.</summary>
+    /// <summary>
+    /// Whether running one of the given methods can lead to <paramref name="to"/> within <paramref name="depth"/> calls. A
+    /// method reached again with no more depth left than before is not followed again: what it can reach was already
+    /// looked at, so the search stays linear in the call graph instead of trying every path.
+    /// </summary>
     /// <param name="targets">The methods a call can run.</param>
     /// <param name="to">The method to come back to.</param>
     /// <param name="depth">How many calls to follow.</param>
-    private bool Reaches(ImmutableArray<IMethodSymbol> targets, IMethodSymbol to, int depth)
+    /// <param name="followed">The methods whose calls were followed, with the depth that was left.</param>
+    private bool Reaches(ImmutableArray<IMethodSymbol> targets, IMethodSymbol to, int depth, Dictionary<IMethodSymbol, int> followed)
     {
         foreach (var target in targets)
         {
@@ -808,14 +813,15 @@ internal sealed class Session
                 return true;
             }
 
-            if (depth <= 0)
+            if (depth <= 0 || followed.TryGetValue(target, out var left) && left >= depth)
             {
                 continue;
             }
 
+            followed[target] = depth;
             foreach (var call in Summary(target).Calls)
             {
-                if (!SymbolEqualityComparer.Default.Equals(call.Callee, target) && Reaches(TargetsOf(call.Callee, call.Dispatched), to, depth - 1))
+                if (!SymbolEqualityComparer.Default.Equals(call.Callee, target) && Reaches(TargetsOf(call.Callee, call.Dispatched), to, depth - 1, followed))
                 {
                     return true;
                 }
@@ -875,18 +881,24 @@ internal sealed class Session
     /// <param name="ordinal">The parameter ordinal in them.</param>
     /// <param name="elements">Whether the method receives elements of the original parameter, so all its reads are per element.</param>
     /// <param name="depth">How many more calls to follow.</param>
-    /// <param name="builder">Where the reads go.</param>
-    private void CollectNavigationReads(ImmutableArray<IMethodSymbol> targets, int ordinal, bool elements, int depth, ImmutableArray<ParameterNavigationRead>.Builder builder)
+    /// <param name="search">Where the reads go, and which methods were followed.</param>
+    private void CollectNavigationReads(ImmutableArray<IMethodSymbol> targets, int ordinal, bool elements, int depth, NavigationReadSearch search)
     {
         foreach (var target in targets)
         {
+            // Reached again with no more depth left, the same parameter and the same element flag, a method adds nothing new.
+            if (!search.Follow(target, ordinal, elements, depth))
+            {
+                continue;
+            }
+
             var summary = Summary(target);
             foreach (var read in summary.NavigationReads)
             {
                 var found = elements ? read with { PerElement = true } : read;
-                if (read.Parameter == ordinal && !builder.Contains(found))
+                if (read.Parameter == ordinal && search.Found.Add(found))
                 {
-                    builder.Add(found);
+                    search.Builder.Add(found);
                 }
             }
 
@@ -905,7 +917,7 @@ internal sealed class Session
                     if (argument.Kind == OriginKind.Parameter && argument.Parameter == ordinal && argument.Path.Length == 0
                         && !SymbolEqualityComparer.Default.Equals(call.Callee, target))
                     {
-                        CollectNavigationReads(TargetsOf(call.Callee, call.Dispatched), i, elements || argument.IsElement, depth - 1, builder);
+                        CollectNavigationReads(TargetsOf(call.Callee, call.Dispatched), i, elements || argument.IsElement, depth - 1, search);
                     }
                 }
             }
@@ -1159,6 +1171,52 @@ internal sealed class Session
     /// <param name="known">A known symbol, possibly missing.</param>
     private static bool Is(INamedTypeSymbol? type, INamedTypeSymbol? known)
         => type is not null && known is not null && SymbolEqualityComparer.Default.Equals(type, known);
+
+    /// <summary>One search for the navigations a parameter is read through: what it found, and what it followed.</summary>
+    /// <param name="builder">Collects the reads, in the order they are found.</param>
+    private sealed class NavigationReadSearch(ImmutableArray<ParameterNavigationRead>.Builder builder)
+    {
+        /// <summary>The methods followed, by parameter and element flag, with the depth that was left.</summary>
+        private readonly Dictionary<(IMethodSymbol Method, int Ordinal, bool Elements), int> _followed = new(FollowedComparer.Instance);
+
+        /// <summary>The reads, in the order they are found.</summary>
+        public ImmutableArray<ParameterNavigationRead>.Builder Builder { get; } = builder;
+
+        /// <summary>The reads found, for a constant-time check that one is new.</summary>
+        public HashSet<ParameterNavigationRead> Found { get; } = [];
+
+        /// <summary>Whether to follow a method: not followed yet for this parameter and flag with as much depth left.</summary>
+        /// <param name="method">The method.</param>
+        /// <param name="ordinal">The parameter.</param>
+        /// <param name="elements">Whether its reads are per element.</param>
+        /// <param name="depth">The depth left.</param>
+        public bool Follow(IMethodSymbol method, int ordinal, bool elements, int depth)
+        {
+            var key = (method, ordinal, elements);
+            if (_followed.TryGetValue(key, out var left) && left >= depth)
+            {
+                return false;
+            }
+
+            _followed[key] = depth;
+            return true;
+        }
+
+        /// <summary>Compares the keys with the symbol comparer.</summary>
+        private sealed class FollowedComparer : IEqualityComparer<(IMethodSymbol Method, int Ordinal, bool Elements)>
+        {
+            /// <summary>The one instance.</summary>
+            public static FollowedComparer Instance { get; } = new();
+
+            /// <inheritdoc />
+            public bool Equals((IMethodSymbol Method, int Ordinal, bool Elements) x, (IMethodSymbol Method, int Ordinal, bool Elements) y)
+                => x.Ordinal == y.Ordinal && x.Elements == y.Elements && SymbolEqualityComparer.Default.Equals(x.Method, y.Method);
+
+            /// <inheritdoc />
+            public int GetHashCode((IMethodSymbol Method, int Ordinal, bool Elements) obj)
+                => unchecked((SymbolEqualityComparer.Default.GetHashCode(obj.Method) * 31 + obj.Ordinal) * 2 + (obj.Elements ? 1 : 0));
+        }
+    }
 
     /// <summary>The key of a cached witness search.</summary>
     /// <param name="Method">The method called.</param>
