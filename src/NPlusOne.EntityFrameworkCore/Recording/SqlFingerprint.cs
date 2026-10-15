@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -50,6 +51,19 @@ internal static partial class SqlFingerprint
     /// <summary>Every reading, for a dialect the guard does not know.</summary>
     private static readonly Backslash[] AllReadings = [Backslash.Never, Backslash.Prefixed, Backslash.Always];
 
+    /// <summary>
+    /// The fingerprint of each command text seen, keyed by the string instance. EF Core keeps one command text per cached
+    /// query and sends that same string every time the query runs, so every element of an N+1 finds its fingerprint here.
+    /// Weak keys: an entry lives as long as EF Core keeps the text, and the table keeps no text alive. It holds
+    /// fingerprints only, never values.
+    /// </summary>
+    private static readonly ConditionalWeakTable<string, Known> KnownTexts = [];
+
+    /// <summary>A command text's fingerprint and the dialect it was read in.</summary>
+    /// <param name="Dialect">The dialect.</param>
+    /// <param name="Fingerprint">The fingerprint in that dialect.</param>
+    private sealed record Known(SqlDialect Dialect, string Fingerprint);
+
     /// <summary>Where a backslash inside a quoted run escapes the next character.</summary>
     private enum Backslash
     {
@@ -79,6 +93,26 @@ internal static partial class SqlFingerprint
         text = InListRegex().Replace(text, "IN (?)");
         text = WhitespaceRegex().Replace(text, " ").Trim();
         return text.Length == 0 ? Empty : text;
+    }
+
+    /// <summary>
+    /// The fingerprint of <paramref name="sql"/>, computed once per command text and dialect: the same string sent again
+    /// is answered from <see cref="KnownTexts"/>. A text seen in another dialect is fingerprinted again, since a dialect
+    /// decides which runs are values.
+    /// </summary>
+    /// <param name="sql">The command text.</param>
+    /// <param name="dialect">The dialect the command was written in.</param>
+    /// <returns>The fingerprint, the same as <see cref="Create"/> returns.</returns>
+    public static string Of(string sql, SqlDialect dialect)
+    {
+        if (KnownTexts.TryGetValue(sql, out var known) && known.Dialect == dialect)
+        {
+            return known.Fingerprint;
+        }
+
+        var fingerprint = Create(sql, dialect);
+        KnownTexts.AddOrUpdate(sql, new Known(dialect, fingerprint));
+        return fingerprint;
     }
 
     /// <summary>

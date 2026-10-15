@@ -123,7 +123,7 @@ public sealed class NPlusOneScope : IDisposable
                 continue;
             }
 
-            fingerprint ??= SqlFingerprint.Create(sql, dialect);
+            fingerprint ??= SqlFingerprint.Of(sql, dialect);
             if (scope._settings.CaptureCallSite && !callSiteCaptured)
             {
                 callSite = CallSiteLocator.Capture(null);

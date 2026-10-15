@@ -26,6 +26,40 @@ public sealed class SqlFingerprintTests
         }
     }
 
+    [Fact]
+    public void A_command_text_sent_again_is_fingerprinted_once()
+    {
+        var sql = new string("SELECT * FROM t WHERE id = @p0 AND name = 'secret'");
+
+        var first = SqlFingerprint.Of(sql, SqlDialect.SqlServer);
+
+        Assert.Equal("SELECT * FROM t WHERE id = @p AND name = ?", first);
+        Assert.Same(first, SqlFingerprint.Of(sql, SqlDialect.SqlServer));
+    }
+
+    [Fact]
+    public void A_scope_records_the_fingerprint_kept_for_the_text()
+    {
+        var sql = new string("SELECT * FROM t WHERE id = @p0");
+        using var scope = NPlusOneGuard.Begin(o => o.CaptureCallSite = false);
+        for (var i = 0; i < 3; i++)
+        {
+            NPlusOneScope.RecordCommand(scope, NPlusOneSuspectKind.Query, sql, SqlDialect.Sqlite);
+        }
+
+        var suspect = Assert.Single(scope.Report.Suspects);
+        Assert.Same(SqlFingerprint.Of(sql, SqlDialect.Sqlite), suspect.Sql);
+    }
+
+    [Fact]
+    public void A_command_text_seen_in_another_dialect_is_read_in_that_dialect()
+    {
+        var sql = new string("SELECT * FROM t WHERE name = \"secret\"");
+
+        Assert.Equal("SELECT * FROM t WHERE name = \"secret\"", SqlFingerprint.Of(sql, SqlDialect.PostgreSql));
+        Assert.Equal("SELECT * FROM t WHERE name = ?", SqlFingerprint.Of(sql, SqlDialect.MySql));
+    }
+
     // Text every dialect reads the same way: no literal shows in any of them.
     [Theory]
     [InlineData("SELECT $$top secret$$, $tag$top secret$tag$ FROM t WHERE a = $1", "SELECT ?, ? FROM t WHERE a = @p")]

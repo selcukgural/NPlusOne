@@ -491,10 +491,17 @@ In the IDE, a declaration edit costs four times a body edit.
   10 lazy loads 707 → 498 µs and 704 → 458 KB. Tests: `CallSiteLocatorTests` (one location read once, red before; two
   lines of one method told apart). Counter-check `tools/countercheck/36-call-site-cache.json` (same `--project` and
   `--filter` as 32): both parts red when undone.
-- **R2. Fingerprints cached by command text.** EF Core reuses one command text string per cached query, so the same
-  string comes back for every element of an N+1. A `ConditionalWeakTable<string, …>` keyed by the string (with the
-  dialect in the value) holds nothing beyond EF Core's own lifetime and keeps no text alive. Prototype: 0.16 µs and
-  nothing allocated on a hit.
+- ~~**R2. Fingerprints cached by command text.**~~ (done 2026-10-15) EF Core reuses one command text string per cached
+  query, so the same string comes back for every element of an N+1, and every one was fingerprinted again.
+  `SqlFingerprint.Of` keeps the fingerprint in a `ConditionalWeakTable<string, …>` keyed by the string instance, with the
+  dialect it was read in: an entry lives as long as EF Core keeps the text, holds no value, and a text seen in another
+  dialect is read again (a double-quoted run is a name on PostgreSQL and a value on MySQL). `FingerprintBenchmarks`:
+  1.1–6.0 µs and 0.7–10 KB computed, 4 ns and nothing allocated from the table. `ScopeBenchmarks.TenCommands`:
+  13.0 µs and 14.6 KB → 1.0 µs and 1.4 KB. `GuardedRequestBenchmarks`, 10 queries, scope without call sites: 162 µs and
+  148 KB → 126 µs and 138 KB (120 µs and 123 KB without a scope); with call sites 264 → 213 µs. Tests:
+  `SqlFingerprintTests` (a text sent again, a text in another dialect, a scope records the kept fingerprint).
+  Counter-check `tools/countercheck/37-fingerprint-cache.json` (same `--project` and `--filter` as 32): all 3 parts red
+  when undone.
 - **R3. One pass for the fingerprint.** A miss runs a left-to-right scan, a `StringBuilder`, then three regex
   `Replace` passes, each a new string. Fold the value, `IN` list and whitespace steps into the scan: write into a pooled
   `char` buffer (`ArrayPool<char>`), find runs with `SearchValues`, and make one string at the end. `SqlFingerprintTests`

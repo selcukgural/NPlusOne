@@ -36,6 +36,8 @@
   query.
 - Call sites cost less: the file and line of a code location are read once, not on every command and lazy load. A
   request with ten queries inside a scope allocates about a third less, and runs about an eighth faster.
+- The SQL of a command is normalized once per command text, not on every run: EF Core sends the same text for every
+  element of an N+1. Without call sites, a scope now adds a few percent to a request's time.
 - New option `AssertThrowsInProduction` (default `false`), read by the ASP.NET Core assert filters.
 - An `IgnoredSqlPatterns` regex without a timeout of its own stops after 100 ms on a command (that command is then not
   recorded), so a pattern that backtracks on SQL with inlined values cannot hold the request.

@@ -51,8 +51,13 @@ public class FingerprintBenchmarks
     [GlobalSetup]
     public void Setup() => _command = Commands[Command];
 
-    /// <summary>One fingerprint.</summary>
+    /// <summary>One fingerprint, computed: a command text the guard has not seen.</summary>
     /// <returns>The fingerprint, so the work is not optimised away.</returns>
     [Benchmark]
     public string Create() => SqlFingerprint.Create(_command.Sql, _command.Dialect);
+
+    /// <summary>One fingerprint as a scope gets it: the same command text again, as EF Core sends it for each element.</summary>
+    /// <returns>The fingerprint.</returns>
+    [Benchmark]
+    public string Of() => SqlFingerprint.Of(_command.Sql, _command.Dialect);
 }

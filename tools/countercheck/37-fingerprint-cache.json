@@ -1,0 +1,20 @@
+[
+  {
+    "name": "A fingerprint is kept for the next command with the same text",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "KnownTexts.AddOrUpdate(sql, new Known(dialect, fingerprint));",
+    "new": ""
+  },
+  {
+    "name": "A kept fingerprint answers only for its own dialect",
+    "file": "src/NPlusOne.EntityFrameworkCore/Recording/SqlFingerprint.cs",
+    "old": "out var known) && known.Dialect == dialect)",
+    "new": "out var known))"
+  },
+  {
+    "name": "The scope records through the cache",
+    "file": "src/NPlusOne.EntityFrameworkCore/NPlusOneScope.cs",
+    "old": "fingerprint ??= SqlFingerprint.Of(sql, dialect);",
+    "new": "fingerprint ??= SqlFingerprint.Create(sql, dialect);"
+  }
+]
