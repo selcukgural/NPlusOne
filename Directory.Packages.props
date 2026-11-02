@@ -61,7 +61,7 @@
     <PackageVersion Include="FluentValidation" Version="12.2.0" />
     <PackageVersion Include="Microsoft.AspNetCore.OData" Version="9.5.0" />
     <PackageVersion Include="Riok.Mapperly" Version="4.3.1" />
-    <PackageVersion Include="LinqContraband" Version="5.17.0" />
+    <PackageVersion Include="LinqContraband" Version="5.18.0" />
     <PackageVersion Include="EFCore.QueryGuard" Version="1.0.1" />
     <PackageVersion Include="DbEye" Version="1.3.0" />
     <PackageVersion Include="MiniProfiler.EntityFrameworkCore" Version="4.5.4" />
